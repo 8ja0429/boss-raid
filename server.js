@@ -23,6 +23,10 @@ try {
   if (e.code !== 'ENOENT') console.error('config.json 을 읽지 못해 기본값으로 실행합니다:', e.message);
 }
 const PORT = Number(process.env.PORT) || cfg.port;
+// 테마: bug(귀여운 벌레 보스, 기본) | king(3D 악당 왕 + 스토리 대사). 서버마다 하나를 고른다
+const THEME = /^[a-z0-9]+$/.test(process.env.THEME || cfg.theme || '') ? process.env.THEME || cfg.theme : 'bug';
+const STORY = THEME === 'king';
+const BOSS_NAME = process.env.BOSS_NAME || cfg.bossName;
 const ADMIN_KEY = String(process.env.ADMIN_KEY || cfg.adminKey || crypto.randomBytes(3).toString('hex'));
 let lastCsv = ''; // 마지막 판 결과 (진행 화면에서 내려받기용)
 
@@ -304,7 +308,12 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'GET' && /^\/img\/[a-z0-9_]+\.(webp|png|jpg)$/.test(p)) {
     const type = p.endsWith('.webp') ? 'image/webp' : p.endsWith('.png') ? 'image/png' : 'image/jpeg';
-    fs.readFile(path.join(ROOT, 'public', 'img', path.basename(p)), (err, data) => {
+    const name = path.basename(p);
+    const base = path.join(ROOT, 'public', 'img');
+    // 보스 그림은 테마 폴더에 있으면 그것을 쓴다
+    const themed = THEME !== 'bug' && name.startsWith('boss_') ? path.join(base, THEME, name) : null;
+    const file = themed && fs.existsSync(themed) ? themed : path.join(base, name);
+    fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404); return res.end(); }
       res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=3600' });
       res.end(data);
@@ -327,7 +336,9 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && p === '/info') {
     return json(res, 200, {
       title: cfg.title,
-      bossName: cfg.bossName,
+      bossName: BOSS_NAME,
+      theme: THEME,
+      story: STORY,
       prize: cfg.prize,
       durationSec: cfg.durationSec,
       lan: lanUrls(),
@@ -441,7 +452,7 @@ server.on('error', (e) => {
 server.listen(PORT, () => {
   setInterval(tick, TICK_MS);
   console.log('');
-  console.log('  ⚔  보스 레이드 서버 실행 중');
+  console.log('  ⚔  보스 레이드 서버 실행 중 (테마: ' + THEME + ')');
   console.log('');
   console.log(`  진행자 화면(프로젝터):  http://localhost:${PORT}/screen?key=${ADMIN_KEY}`);
   const lan = lanUrls();

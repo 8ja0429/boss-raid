@@ -82,6 +82,16 @@
   body.enraged #hpFill { background: linear-gradient(180deg, #ffd27a 0%, #ff7a1a 45%, #c2410c 100%); }
   .hp::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - .3rem), rgba(0,0,0,.45) calc(10% - .3rem) 10%), linear-gradient(180deg, rgba(255,255,255,.35), transparent 45%); }
   #bossZone { position: absolute; left: 0; right: 0; top: 14rem; bottom: 2rem; }
+  /* 보스 대사 말풍선 */
+  #say { position: absolute; left: 64%; top: 2rem; z-index: 8; white-space: nowrap; background: #fff; color: #1a0b2e; font-size: 3.2rem; font-weight: 900;
+    padding: 1.2rem 2.6rem; border-radius: 3rem; opacity: 0; transform: translateX(-50%) scale(.5); transform-origin: 30% 100%; pointer-events: none;
+    transition: opacity .18s, transform .32s cubic-bezier(.2, 1.9, .4, 1); box-shadow: 0 .8rem 2rem rgba(0, 0, 0, .45); }
+  #say.on { opacity: 1; transform: translateX(-50%) scale(1); }
+  #say::after { content: ""; position: absolute; left: 22%; bottom: -1.5rem; border: 1.4rem solid transparent; border-top-color: #fff; border-bottom: 0; }
+  body.enraged #say { background: #ffe45c; } body.enraged #say::after { border-top-color: #ffe45c; }
+  #story { position: absolute; left: 50rem; width: 64rem; top: 2rem; text-align: center; font-size: 3rem; font-weight: 900; line-height: 1.35; text-shadow: 0 .35rem 0 rgba(0, 0, 0, .7), 0 0 2rem rgba(0, 0, 0, .8); z-index: 2; }
+  #story b { color: #ffd60a; }
+  #resSub .story { display: block; font-size: 3.6rem; font-weight: 900; color: #fff; margin-bottom: .4rem; }
   #fight .boss { position: absolute; left: 50%; top: 50%; width: 66rem; height: 66rem; margin: -33.5rem 0 0 -35rem; }
   .dmg { position: absolute; white-space: nowrap; font-size: 2.5rem; font-weight: 900; color: #fff; pointer-events: none; z-index: 6;
     text-shadow: 0 .3rem 0 #000, 0 0 1.4rem #ff3d81; will-change: transform, opacity; }
@@ -215,8 +225,9 @@
       <div id="joinUrl"></div>
     </div>
     <div id="prize"></div>
+    <div id="story"></div>
     <div class="center">
-      <div class="bubble">덤벼라, 인간들아!</div>
+      <div class="bubble" id="lobbySay">덤벼라, 인간들아!</div>
       <div class="boss" id="lobbyBoss"></div>
       <button class="bigBtn" id="bigStart" data-a="start">▶ 게임 시작<small>Space</small></button>
     </div>
@@ -238,7 +249,7 @@
         <div class="hpTop"><span id="bossName">보스<small><img class="ic" src="/img/ic_fire.webp" alt=""> 분노!</small></span><span id="hpNum"></span></div>
         <div class="hp"><i id="hpGhost"></i><i id="hpFill"></i></div>
       </div>
-      <div id="bossZone"><div class="boss" id="boss"></div></div>
+      <div id="bossZone"><div class="boss" id="boss"></div><div id="say"></div></div>
       <div id="banner"></div>
       <div id="stunInfo"></div>
     </div>
@@ -303,6 +314,10 @@
     $('title').innerHTML = ic('sword') + ' ' + esc(i.title);
     $('bossName').firstChild.nodeValue = i.bossName;
     $('prize').innerHTML = i.prize ? ic('gift') + ' ' + esc(i.prize) : '';
+    if (i.story) {
+      $('story').innerHTML = esc(i.bossName) + '이 <b>오늘 강의 자료</b>를 훔쳐 갔다!<br>모두 힘을 합쳐 되찾아라!';
+      $('lobbySay').textContent = LOBBY_LINES[0];
+    }
     $('resPrize').innerHTML = i.prize ? ic('gift') + ' ' + esc(i.prize) : '';
     let url = qs.get('join') || location.origin;
     if (!qs.get('join') && /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && i.lan && i.lan[0]) url = i.lan[0];
@@ -314,6 +329,20 @@
       $('qr').innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
     } catch (e) { $('qr').textContent = url; }
   }).catch(() => {});
+
+  // ---------- 보스 대사 ----------
+  let sayT = null, lowSaid = false;
+  function say(text, ms) {
+    if (!info.story) return; // 스토리 대사는 king 테마에서만
+    const el = $('say');
+    el.textContent = text;
+    el.classList.add('on');
+    clearTimeout(sayT);
+    sayT = setTimeout(() => el.classList.remove('on'), ms || 2600);
+  }
+  const LOBBY_LINES = ['오늘 강의 자료는 내가 접수했다!', '되찾고 싶으면 덤벼라!', '너희 손가락으로 날 이기겠다고? 크하하!', '강의는 영영 시작 못 할 거다!'];
+  let lobbyLine = 0;
+  setInterval(() => { if (state === 'lobby' && info.story) $('lobbySay').textContent = LOBBY_LINES[++lobbyLine % LOBBY_LINES.length]; }, 4200);
 
   // ---------- 진행자 조작 ----------
   function admin(action, extra) {
@@ -500,15 +529,16 @@
       countEnd = now + m.t;
       setView('countdown');
     } else if (m.s === 'fight') {
-      if (prev !== 'fight') { bgm(true); lastHp = m.hp; }
+      if (prev !== 'fight') { bgm(true); lastHp = m.hp; lowSaid = false; say('감히 내 강의 자료를 노려?! 덤벼라!', 3000); }
       setView('fight');
       timeEnd = now + m.t;
-      if (m.fever > 0 && !(feverEnd > now)) sfx.fever();
+      if (m.fever > 0 && !(feverEnd > now)) { sfx.fever(); say('크윽… 힘이 빠진다!', 2400); }
       feverEnd = m.fever > 0 ? now + m.fever : 0;
       if (m.ae > 0) {
         if (!(atkEnd > now)) { atkStart = now + m.aw; atkEnd = now + m.ae; atkSounded = false; if (m.aw > 300) sfx.warn(); }
       } else if (atkEnd - now < 300) atkEnd = 0;
-      if (m.enr && !enraged) { enraged = true; sfx.rage(); shake(900, 2.2); bossCenterSparks(60, '#ff7a1a', 2.4); }
+      if (m.enr && !enraged) { enraged = true; sfx.rage(); shake(900, 2.2); bossCenterSparks(60, '#ff7a1a', 2.4); say('제법이군… 이제부터 진짜다!', 3200); }
+      if (!lowSaid && m.max && m.hp < m.max * 0.15) { lowSaid = true; say('아, 안 돼! 내 교재가…!', 3000); }
       bossEl.classList.toggle('enraged', enraged);
       document.body.classList.toggle('enraged', enraged);
       setHp(m.hp, m.max);
@@ -526,6 +556,7 @@
         if (m.win && prev === 'fight') { // 보스가 쓰러지는 연출을 보여주고 결과로
           setHp(0, m.max);
           setView('dying');
+          say('으아아악—! 내 교재…!', 2200);
           bossEl.classList.add('dead');
           sfx.boom(); shake(1200, 3); bossCenterSparks(140, '#ffd60a', 3.2); bossCenterSparks(80, '#ffffff', 2.2);
           clearTimeout(dying);
@@ -548,7 +579,7 @@
     document.body.classList.toggle('atk', atk);
     bossEl.classList.toggle('warn', warn);
     bossEl.classList.toggle('attack', atk);
-    if (atk && !atkSounded) { atkSounded = true; sfx.atk(); shake(500, 1.6); }
+    if (atk && !atkSounded) { atkSounded = true; sfx.atk(); shake(500, 1.6); say('건방진 것들, 손 떼라!', 1800); }
     const bn = atk ? 'atk' : warn ? 'warn' : fever ? 'fever' : '';
     if ($('banner').dataset.k !== bn) {
       $('banner').dataset.k = bn;
@@ -591,8 +622,8 @@
   function bossCenterSparks(n, c, p) { const b = bossPoint(); sparks(b.x, b.y, n, c, p); }
   function shake(ms, amp) {
     const a = amp || 1, f = [];
-    for (let i = 0; i < 10; i++) f.push({ transform: 'translate(' + (Math.random() - 0.5) * a * 2 + 'rem,' + (Math.random() - 0.5) * a * 2 + 'rem)' });
-    f.push({ transform: 'translate(0,0)' });
+    for (let i = 0; i < 10; i++) f.push({ transform: 'translate(calc(-50% + ' + (Math.random() - 0.5) * a * 2 + 'rem), calc(-50% + ' + (Math.random() - 0.5) * a * 2 + 'rem))' });
+    f.push({ transform: 'translate(-50%, -50%)' });
     $('stage').animate(f, { duration: ms, easing: 'linear' });
   }
   function hitFx(hits) {
@@ -685,9 +716,9 @@
     const list = m.rank || [];
     const total = list.reduce((a, r) => a + r[2], 0);
     $('resTitle').innerHTML = m.win ? ic('party') + ' 토벌 성공!' : ic('clock') + ' 보스가 도망쳤다…';
-    $('resSub').innerHTML = m.win
+    $('resSub').innerHTML = (info.story ? '<span class="story">' + (m.win ? '강의 자료 탈환 성공! 이제 강의를 시작합니다' : '강의 자료는 놓쳤지만… 강의는 시작합니다!') + '</span>' : '') + (m.win
       ? '<b>' + (m.clear / 1000).toFixed(1) + '초</b> 만에 격파 · ' + m.n + '명이 총 <b>' + total.toLocaleString() + '</b> 데미지'
-      : '남은 체력 <b>' + m.hp.toLocaleString() + '</b> · ' + m.n + '명이 총 <b>' + total.toLocaleString() + '</b> 데미지';
+      : '남은 체력 <b>' + m.hp.toLocaleString() + '</b> · ' + m.n + '명이 총 <b>' + total.toLocaleString() + '</b> 데미지');
     const pod = $('podium');
     pod.textContent = '';
     [1, 0, 2].forEach((i) => {

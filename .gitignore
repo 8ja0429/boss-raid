@@ -1,4 +1,5 @@
 results/
 node_modules/
-# 원본 PNG는 용량이 커서 제외 (게임은 webp만 사용)
+# 원본 PNG와 시안은 용량이 커서 제외 (게임은 webp만 사용)
 public/img/*.png
+draft/

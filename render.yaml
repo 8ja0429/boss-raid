@@ -1,5 +1,6 @@
-# Render 배포 설정. 저장소를 Render에 연결하면 이 파일대로 서버가 만들어집니다.
+# Render 배포 설정. 같은 코드로 서비스 두 개를 띄웁니다(주소가 서로 다르고 게임도 따로 진행됩니다).
 services:
+  # 1) 귀여운 벌레 보스 버전
   - type: web
     name: boss-raid
     runtime: node
@@ -8,4 +9,16 @@ services:
     startCommand: node server.js
     envVars:
       - key: ADMIN_KEY # 진행자 화면 주소에 붙는 비밀 키 (자동 생성)
+        generateValue: true
+  # 2) 3D 악당 왕 + 스토리 대사 버전
+  - type: web
+    name: boss-raid-king
+    runtime: node
+    plan: free
+    buildCommand: "true"
+    startCommand: node server.js
+    envVars:
+      - key: THEME
+        value: king
+      - key: ADMIN_KEY
         generateValue: true

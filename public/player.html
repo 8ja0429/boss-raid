@@ -115,7 +115,7 @@
 <section id="join" class="view on">
   <div class="boss" id="joinBoss"></div>
   <h1 id="title">보스 레이드</h1>
-  <p>다 같이 연타해서 보스를 쓰러뜨리세요!</p>
+  <p id="joinSub">다 같이 연타해서 보스를 쓰러뜨리세요!</p>
   <input id="name" maxlength="10" placeholder="닉네임 (최대 10자)" autocomplete="off" enterkeyhint="go">
   <button id="go">입장하기</button>
   <div id="joinErr"></div>
@@ -187,6 +187,7 @@
     $('title').textContent = i.title;
     $('bossName').textContent = i.bossName;
     document.title = i.title;
+    if (i.story) $('joinSub').innerHTML = '보스가 훔쳐 간 강의 자료를<br>다 같이 연타해서 되찾으세요!';
   }).catch(() => {});
 
   function post(url, body) {
@@ -300,7 +301,7 @@
     $('count').style.display = state === 'countdown' ? 'flex' : 'none';
 
     if (state === 'lobby') {
-      setMsg(esc(me.name) + ' 님, 입장 완료!<small>곧 시작합니다. 앞 화면을 봐 주세요<br>보스가 <b style="color:#ff6b6b">빨갛게</b> 변하면 손을 떼야 해요</small>');
+      setMsg(esc(me.name) + ' 님, 입장 완료!<small>' + (info.story ? esc(info.bossName) + '이 오늘 강의 자료를 훔쳐 갔어요!<br>' : '') + '곧 시작합니다. 앞 화면을 봐 주세요<br>보스가 <b style="color:#ff6b6b">빨갛게</b> 변하면 손을 떼야 해요</small>');
       $('timer').textContent = '';
     } else if (state === 'countdown') {
       const left = countEnd - now;
