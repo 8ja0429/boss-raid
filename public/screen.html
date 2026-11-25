@@ -481,13 +481,14 @@
   requestAnimationFrame(frame);
 
   // ---------- 실시간 수신 ----------
-  let es = new EventSource('/events'), gotLive = false, pollTimer = null, lastQ = -1;
+  let es = new EventSource('/events'), pollTimer = null, lastQ = -1, lastMsgAt = performance.now();
   es.onerror = () => { if (!pollTimer) $('conn').style.display = 'block'; };
-  es.onmessage = (e) => { gotLive = true; $('conn').style.display = 'none'; let m; try { m = JSON.parse(e.data); } catch (err) { return; } onMsg(m); };
-  // 2.5초 안에 아무것도 안 오면 실시간 연결이 막힌 환경 → 주기 조회로 전환
-  setTimeout(() => {
-    if (gotLive) return;
-    es.close(); es = null;
+  es.onmessage = (e) => { lastMsgAt = performance.now(); $('conn').style.display = 'none'; let m; try { m = JSON.parse(e.data); } catch (err) { return; } onMsg(m); };
+  // 감시: 서버는 0.2초마다 보내므로 3초 동안 아무것도 안 오면 연결이 막혔거나 끊긴 것 → 주기 조회로 전환.
+  // (처음부터 실시간 연결을 막는 프록시·터널, 중간에 와이파이가 끊겼다 돌아온 경우 모두 여기서 복구된다)
+  function startPoll() {
+    if (pollTimer) return;
+    if (es) { es.close(); es = null; }
     let busy = false;
     pollTimer = setInterval(() => {
       if (busy) return;
@@ -496,7 +497,8 @@
         .then((m) => { busy = false; $('conn').style.display = 'none'; onMsg(m); })
         .catch(() => { busy = false; $('conn').style.display = 'block'; });
     }, 200);
-  }, 2500);
+  }
+  setInterval(() => { if (!pollTimer && performance.now() - lastMsgAt > 3000) startPoll(); }, 1000);
 
   function setView(v) {
     if (view === v) return;
@@ -787,6 +789,7 @@
   }
   function openResult(m) {
     setView('result');
+    document.body.classList.remove('enraged');
     cerClear();
     R.className = 'intro';
     const st = [];
