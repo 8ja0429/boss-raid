@@ -16,6 +16,7 @@
   .view { position: fixed; inset: 0; display: none; flex-direction: column;
     padding: max(14px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom)); }
   .view.on { display: flex; }
+  .ic { height: 1.2em; width: auto; vertical-align: -0.24em; filter: drop-shadow(0 .2em .25em rgba(0, 0, 0, .45)); }
   .bg { position: fixed; inset: 0; z-index: -1; background: #0d0620 url(/img/bg_arena_s.webp) 47% 100% / cover no-repeat; }
   .bg::before, .bg::after { content: ""; position: absolute; inset: 0; transition: opacity .3s; }
   .bg::before { background: linear-gradient(180deg, rgba(13, 6, 32, .85) 0%, rgba(13, 6, 32, .3) 35%, rgba(13, 6, 32, .25) 65%, rgba(13, 6, 32, .9) 100%); }
@@ -62,7 +63,8 @@
     font-size: 40vw; font-weight: 900; color: #ffd60a; text-shadow: 0 8px 0 #7a4b00; pointer-events: none; }
   #stun { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
     background: rgba(10, 4, 24, .82); font-size: 34px; font-weight: 900; pointer-events: none; z-index: 5; }
-  #stun b { font-size: 70px; animation: spin 1s linear infinite; display: block; }
+  #stun b { font-size: 70px; animation: spin 1s linear infinite; display: block; line-height: 1; }
+  #stun b .ic { height: 1.3em; vertical-align: middle; }
   #stun small { font-size: 16px; color: #c9b8ff; margin-top: 8px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .float { position: absolute; font-size: 30px; font-weight: 900; color: #fff; pointer-events: none;
@@ -78,13 +80,27 @@
   #conn { position: fixed; left: 50%; top: 4px; transform: translateX(-50%); font-size: 12px; background: #b91c1c;
     padding: 3px 10px; border-radius: 10px; display: none; z-index: 10; }
 
+  /* ---- 발표 대기 ---- */
+  #wait { align-items: center; justify-content: center; text-align: center; gap: 14px; }
+  #wait .big { font-size: 34px; font-weight: 900; color: #ffe45c; animation: pulse .5s ease-in-out infinite alternate; }
+  #wait .q { font-size: 110px; font-weight: 900; line-height: 1; color: #ffd60a; text-shadow: 0 6px 0 #7a4b00; animation: qspin 1.2s ease-in-out infinite; }
+  #wait p { margin: 0; font-size: 18px; color: #d9ccff; font-weight: 700; }
+  #waitDmg { font-size: 22px; }
+  @keyframes qspin { 0%, 100% { transform: rotate(-8deg) scale(1); } 50% { transform: rotate(8deg) scale(1.12); } }
+
   /* ---- 결과 ---- */
+  #result > * { animation: resIn .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+  #result > :nth-child(2) { animation-delay: .12s; } #result > :nth-child(3) { animation-delay: .3s; } #result > :nth-child(4) { animation-delay: .4s; } #result > :nth-child(5) { animation-delay: .55s; }
+  @keyframes resIn { from { opacity: 0; transform: translateY(20px) scale(.7); } }
+  #resAward { height: 120px; }
   #result { align-items: center; justify-content: center; text-align: center; gap: 10px; }
   #resTitle { font-size: 30px; font-weight: 900; }
   #resRank { font-size: 92px; font-weight: 900; line-height: 1; color: #ffd60a; text-shadow: 0 6px 0 #7a4b00; }
   #resRank small { font-size: 34px; }
   #resDmg { font-size: 20px; color: #d9ccff; }
-  #resNote { font-size: 18px; color: #ffe45c; min-height: 24px; }
+  #resNote { font-size: 18px; color: #ffe45c; min-height: 24px; line-height: 1.5; }
+  #resNote div { white-space: nowrap; }
+  #resNote div + div { color: #ff9d9d; }
   #resTop { width: 100%; max-width: 340px; margin-top: 10px; background: rgba(20, 10, 50, .8); border: 2px solid #3a2380; border-radius: 16px; padding: 8px 14px; }
   #resTop div { display: flex; justify-content: space-between; padding: 7px 0; font-size: 18px; border-bottom: 1px solid #2c1a66; }
   #resTop div:last-child { border: 0; }
@@ -114,7 +130,7 @@
     <div class="boss" id="boss"></div>
     <div id="msg"></div>
     <div id="count"></div>
-    <div id="stun"><b>💫</b>기절!<small>보스가 빨갈 땐 손을 떼세요</small></div>
+    <div id="stun"><b><img class="ic" src="/img/ic_stun.webp" alt=""></b>기절!<small>보스가 빨갈 땐 손을 떼세요</small></div>
   </div>
   <div class="bottom">
     <div class="stat"><span>내 데미지</span><b id="myScore">0</b></div>
@@ -122,7 +138,15 @@
   </div>
 </section>
 
+<section id="wait" class="view">
+  <div class="big">결과 발표 중!</div>
+  <div class="q">?<span style="font-size:.4em">위</span></div>
+  <div id="waitDmg"></div>
+  <p>앞 화면을 봐 주세요 · 내 순위는 곧 공개됩니다</p>
+</section>
+
 <section id="result" class="view">
+  <img id="resAward" alt="">
   <div id="resTitle"></div>
   <div id="resRank"></div>
   <div id="resDmg"></div>
@@ -148,6 +172,9 @@
   $('joinBoss').innerHTML = bossHTML(true);
   $('boss').innerHTML = bossHTML(true);
   const bossEl = $('boss'), arena = $('arena'), msg = $('msg');
+  const ic = (n) => '<img class="ic" src="/img/ic_' + n + '.webp" alt="">';
+  let lastMsg = null, resTimer = null;
+  function setMsg(h) { if (h !== lastMsg) { lastMsg = h; msg.innerHTML = h; } }
 
   let me = null;          // {pid, name}
   let state = 'lobby';
@@ -245,7 +272,8 @@
       } else if (atkEnd - now < 300) atkEnd = 0;
       bossEl.classList.toggle('enraged', !!m.enr);
     }
-    if (m.s === 'result' && prev !== 'result') showResult(m);
+    if (m.s === 'result' && prev !== 'result') showResult(m, prev === 'fight');
+    if (m.s !== 'result') clearTimeout(resTimer);
     ui();
   }
 
@@ -272,18 +300,18 @@
     $('count').style.display = state === 'countdown' ? 'flex' : 'none';
 
     if (state === 'lobby') {
-      msg.innerHTML = esc(me.name) + ' 님, 입장 완료!<small>곧 시작합니다. 앞 화면을 봐 주세요<br>보스가 <b style="color:#ff6b6b">빨갛게</b> 변하면 손을 떼야 해요</small>';
+      setMsg(esc(me.name) + ' 님, 입장 완료!<small>곧 시작합니다. 앞 화면을 봐 주세요<br>보스가 <b style="color:#ff6b6b">빨갛게</b> 변하면 손을 떼야 해요</small>');
       $('timer').textContent = '';
     } else if (state === 'countdown') {
       const left = countEnd - now;
       $('count').textContent = left > 900 ? Math.ceil(left / 1000 - 0.9) : 'GO!';
-      msg.textContent = '';
+      setMsg('');
     } else if (state === 'fight') {
       $('timer').textContent = Math.max(0, (timeEnd - now) / 1000).toFixed(1);
-      if (atk) msg.textContent = '✋ 터치 금지!';
-      else if (warn) msg.textContent = '⚠ 반격 온다! 손 뗄 준비';
-      else if (fever) msg.textContent = '🔥 FEVER! 데미지 2배';
-      else msg.textContent = '연타! 연타! 연타!';
+      if (atk) setMsg(ic('hand') + ' 터치 금지!');
+      else if (warn) setMsg(ic('warn') + ' 반격 온다! 손 뗄 준비');
+      else if (fever) setMsg(ic('fire') + ' FEVER! 데미지 2배');
+      else setMsg('연타! 연타! 연타!');
     }
     $('myScore').textContent = (serverScore + (pending + inflight) * 1).toLocaleString();
     $('myRank').textContent = myRank ? myRank + '위' : '-';
@@ -357,7 +385,8 @@
   }, 250);
 
   // ---------- 결과 ----------
-  function showResult(m) {
+  // 방금 끝난 판이면 앞 화면의 시상식이 끝날 때까지 순위를 숨겼다가 공개한다
+  function showResult(m, live) {
     pending = 0;
     document.body.classList.remove('fever', 'warn', 'atk');
     bossEl.classList.remove('warn', 'attack');
@@ -365,26 +394,38 @@
     const list = m.rank || [];
     const idx = me ? list.findIndex((r) => r[0] === me.pid) : -1;
     const mine = idx >= 0 ? list[idx] : null;
-    $('resTitle').textContent = m.win ? '🎉 토벌 성공!' : '⏰ 보스가 도망쳤다…';
+    $('resTitle').innerHTML = m.win ? ic('party') + ' 토벌 성공!' : ic('clock') + ' 보스가 도망쳤다…';
     $('resRank').innerHTML = mine ? (idx + 1) + '<small>위</small>' : '-';
-    $('resDmg').textContent = mine ? '내 데미지 ' + mine[2].toLocaleString() + (list.length ? ' · ' + m.n + '명 참가' : '') : '';
+    $('resDmg').textContent = mine ? '내 데미지 ' + mine[2].toLocaleString() + ' · ' + m.n + '명 참가' : '';
+    const aw = $('resAward');
+    aw.style.display = idx >= 0 && idx < 3 ? '' : 'none';
+    if (idx >= 0 && idx < 3) aw.src = idx === 0 ? '/img/trophy_s.webp' : '/img/ic_medal' + (idx + 1) + '.webp';
     let note = '';
-    if (idx === 0) note = '🏆 1등! 이 화면을 강사님께 보여주세요';
-    else if (idx > 0 && idx < 3) note = '🥈 시상대 입성!';
-    if (m.last && me && m.last.pid === me.pid) note += (note ? ' · ' : '') + '⚔ 막타의 주인공!';
-    $('resNote').textContent = note;
+    if (idx === 0) note = ic('trophy') + ' 1등! 이 화면을 강사님께 보여주세요';
+    else if (idx > 0 && idx < 3) note = ic('crown') + ' 시상대 입성!';
+    // 1등 문구와 막타 문구는 한 줄씩 따로
+    const notes = note ? [note] : [];
+    if (m.last && me && m.last.pid === me.pid) notes.push(ic('sword') + ' 막타의 주인공!');
+    $('resNote').innerHTML = notes.map((t) => '<div>' + t + '</div>').join('');
     const top = $('resTop');
     top.textContent = '';
-    const medals = ['🥇', '🥈', '🥉'];
     list.slice(0, 3).forEach((r, i) => {
       const d = document.createElement('div');
       if (me && r[0] === me.pid) d.className = 'me';
-      const a = document.createElement('span'); a.textContent = medals[i] + ' ' + r[1];
+      const a = document.createElement('span'); a.innerHTML = ic('medal' + (i + 1)) + ' '; a.appendChild(document.createTextNode(r[1]));
       const b = document.createElement('span'); b.textContent = r[2].toLocaleString();
       d.append(a, b); top.appendChild(d);
     });
-    setTimeout(() => { if (state === 'result' && me) show('result'); }, m.win ? 1600 : 400);
-    if (navigator.vibrate) navigator.vibrate(idx === 0 ? [100, 50, 100, 50, 300] : 200);
+    clearTimeout(resTimer);
+    const open = () => {
+      if (state !== 'result' || !me) return;
+      show('result');
+      if (navigator.vibrate) navigator.vibrate(idx === 0 ? [100, 50, 100, 50, 300] : 200);
+    };
+    if (!live) return open();
+    $('waitDmg').textContent = mine ? '내 데미지 ' + mine[2].toLocaleString() : '';
+    setTimeout(() => { if (state === 'result' && me) show('wait'); }, m.win ? 1600 : 300);
+    resTimer = setTimeout(open, m.win ? 12600 : 10300);
   }
 
   function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }

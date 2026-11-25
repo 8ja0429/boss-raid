@@ -6,11 +6,12 @@
 <title>보스 레이드 — 진행 화면</title>
 <style>
   * { box-sizing: border-box; }
-  html { font-size: 1vh; }
-  @media (max-aspect-ratio: 16/10) { html { font-size: 0.58vw; } }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0418; }
+  /* 화면은 항상 16:9 무대(가로 177.78rem × 세로 100rem)로 그리고, 창 크기에 맞춰 통째로 축소한다 */
+  html { font-size: min(1vh, 0.5625vw); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #05020d; }
   body { font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; font-weight: 800; color: #fff; }
-  #stage { position: fixed; inset: 0; overflow: hidden; }
+  #stage { position: fixed; left: 50%; top: 50%; width: 177.78rem; height: 100rem; transform: translate(-50%, -50%); overflow: hidden; background: #0a0418; }
+  .ic { height: 1.2em; width: auto; vertical-align: -0.24em; filter: drop-shadow(0 .25em .3em rgba(0, 0, 0, .45)); }
   /* 배경 그림: 대기실에서는 가운데, 전투가 시작되면 보스 쪽으로 카메라가 이동 */
   .bg { position: absolute; top: -17%; left: -12.75%; width: 125%; height: 148%; background: #120636 url(/img/bg_arena.webp) center / 100% 100% no-repeat;
     transition: left 1.2s cubic-bezier(.4, 0, .2, 1), filter .6s; }
@@ -27,7 +28,7 @@
   body.atk .bgAtk { opacity: 1; animation: atkPulse .25s ease-in-out infinite alternate; }
   body.atk .bgFever { opacity: 0; }
   @keyframes atkPulse { to { opacity: .65; } }
-  #fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
+  #fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
 
   header { position: absolute; left: 0; right: 0; top: 0; height: 9rem; display: flex; align-items: center; justify-content: space-between; padding: 0 4rem; z-index: 5; }
   #title { font-size: 4rem; font-weight: 900; letter-spacing: -.1rem; text-shadow: 0 .4rem 0 rgba(0,0,0,.5); }
@@ -118,25 +119,57 @@
   #count span { display: block; animation: countPop .9s cubic-bezier(.2, 1.6, .4, 1) both; }
   @keyframes countPop { from { transform: scale(2.4); opacity: 0; } }
 
-  /* ---------- 결과 ---------- */
+  /* ---------- 결과(시상식) ---------- */
   #result { text-align: center; }
-  #resTitle { font-size: 9rem; font-weight: 900; margin-top: 0; line-height: 1.1; animation: countPop .7s cubic-bezier(.2, 1.6, .4, 1) both;
+  #resHead { position: absolute; left: 0; right: 0; top: 0; transform-origin: 50% 0; transition: transform 1s cubic-bezier(.3, 1.15, .4, 1); z-index: 3; }
+  #result.intro #resHead { transform: translateY(27rem) scale(1.5); }
+  #resTitle { font-size: 9rem; font-weight: 900; line-height: 1.1; animation: countPop .7s cubic-bezier(.2, 1.6, .4, 1) both;
     background: linear-gradient(180deg, #fff 20%, #ffd60a); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 .6rem 0 rgba(0,0,0,.6)); }
   #resSub { font-size: 3rem; color: #d9ccff; margin-top: .6rem; }
   #resSub b { color: #ffd60a; }
-  #podium { position: absolute; left: 6rem; width: 100rem; bottom: 4rem; height: 62rem; display: flex; align-items: flex-end; justify-content: center; gap: 2rem; }
+  /* 스포트라이트 */
+  #spot { position: absolute; inset: -9rem 0 0 0; pointer-events: none; opacity: 0; transition: opacity .5s; z-index: 1; }
+  #result.drum #spot, #result.crowned #spot { opacity: 1; }
+  .beam { position: absolute; top: -6rem; width: 46rem; height: 124rem; transform-origin: 50% 0; mix-blend-mode: screen;
+    background: linear-gradient(180deg, rgba(255, 236, 170, .6), rgba(255, 236, 170, 0) 88%); clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%);
+    transition: left .5s ease-out, transform .5s ease-out; }
+  .beam.b1 { left: 8rem; animation: sweepA 1.05s ease-in-out infinite alternate; }
+  .beam.b2 { left: 58rem; animation: sweepB .85s ease-in-out infinite alternate; }
+  #result.crowned .beam { animation: none; left: 33rem; }
+  #result.crowned .beam.b1 { transform: rotate(-7deg); } #result.crowned .beam.b2 { transform: rotate(7deg); }
+  @keyframes sweepA { from { transform: rotate(-24deg); } to { transform: rotate(30deg); } }
+  @keyframes sweepB { from { transform: rotate(26deg); } to { transform: rotate(-30deg); } }
+  #drum { position: absolute; left: 6rem; width: 100rem; top: 18rem; font-size: 5.4rem; font-weight: 900; color: #ffe45c; text-shadow: 0 .5rem 0 #000; opacity: 0; z-index: 4; }
+  #result.drum #drum { opacity: 1; animation: pulse .16s ease-in-out infinite alternate; }
+  #flash { position: absolute; inset: -9rem 0 0 0; background: #fff; opacity: 0; pointer-events: none; z-index: 9; }
+  /* 시상대 */
+  #podium { position: absolute; left: 6rem; width: 100rem; bottom: 3rem; height: 64rem; display: flex; align-items: flex-end; justify-content: center; gap: 2rem; z-index: 2; }
   .pod { width: 30rem; display: flex; flex-direction: column; align-items: center; }
-  .pod .medal { font-size: 8rem; line-height: 1; animation: pop .6s cubic-bezier(.2, 1.8, .4, 1) both; }
-  .pod .pn { font-size: 3.8rem; font-weight: 900; margin-top: .6rem; max-width: 30rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pod .ps { font-size: 3rem; color: #ffd60a; font-variant-numeric: tabular-nums; margin-bottom: 1.2rem; }
-  .pod .blk { width: 100%; border-radius: 2rem 2rem 0 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 1.4rem; font-size: 8rem; font-weight: 900;
-    transform-origin: bottom; animation: rise .9s cubic-bezier(.2, 1.2, .4, 1) both; }
-  .pod.p1 .blk { height: 30rem; background: linear-gradient(180deg, #ffe45c, #f59e0b); color: #7a4b00; box-shadow: 0 0 8rem rgba(255, 214, 10, .6); }
-  .pod.p2 .blk { height: 21rem; background: linear-gradient(180deg, #e5e7eb, #9ca3af); color: #4b5563; animation-delay: .2s; }
-  .pod.p3 .blk { height: 15rem; background: linear-gradient(180deg, #f0a875, #b45309); color: #6b2f05; animation-delay: .4s; }
-  .pod.p1 .pn { font-size: 5rem; color: #ffe45c; }
-  @keyframes rise { from { transform: scaleY(0); } }
-  #resSide { position: absolute; right: 4rem; top: 20rem; width: 62rem; bottom: 4rem; text-align: left; }
+  .pod .top { display: flex; flex-direction: column; align-items: center; opacity: 0; transform: translateY(4rem) scale(.5); transition: opacity .3s, transform .55s cubic-bezier(.2, 1.9, .4, 1); }
+  .pod.show .top { opacity: 1; transform: none; }
+  .pod .award { height: 11rem; filter: drop-shadow(0 .8rem 1rem rgba(0, 0, 0, .5)); }
+  .pod.p1 .award { height: 19rem; }
+  .pod.p1.show .award { animation: trophyDrop .9s cubic-bezier(.3, 1.5, .5, 1) both, trophyGlow 1.5s ease-in-out .9s infinite alternate; }
+  @keyframes trophyDrop { from { transform: translateY(-40rem) rotate(-25deg) scale(1.6); opacity: 0; } }
+  @keyframes trophyGlow { from { filter: drop-shadow(0 0 1rem rgba(255, 214, 10, .5)); transform: translateY(0); } to { filter: drop-shadow(0 0 3.5rem rgba(255, 214, 10, 1)); transform: translateY(-.8rem); } }
+  .pod .pn { font-size: 3.8rem; font-weight: 900; margin-top: .4rem; max-width: 30rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 .3rem 0 rgba(0,0,0,.6); }
+  .pod .ps { font-size: 3rem; color: #ffd60a; font-variant-numeric: tabular-nums; margin-bottom: 1rem; }
+  .pod.p1 .pn { font-size: 5.4rem; color: #ffe45c; max-width: none; overflow: visible; text-shadow: 0 .4rem 0 #7a4b00, 0 0 3rem rgba(255, 214, 10, .8); }
+  .pod.p1 .pn.long { font-size: 4rem; }
+  .pod.p1 .ps { font-size: 3.6rem; }
+  .pod .blk { width: 100%; border-radius: 2rem 2rem 0 0; display: flex; align-items: flex-start; justify-content: center; padding-top: 1.2rem; font-size: 8rem; font-weight: 900;
+    transform-origin: bottom; transform: scaleY(0); transition: transform .9s cubic-bezier(.2, 1.2, .4, 1); }
+  #result.stage .pod .blk { transform: none; }
+  .pod.p1 .blk { height: 27rem; background: linear-gradient(180deg, #ffe45c, #f59e0b); color: #7a4b00; transition-delay: .3s; }
+  .pod.p2 .blk { height: 20rem; background: linear-gradient(180deg, #e5e7eb, #9ca3af); color: #4b5563; transition-delay: .15s; }
+  .pod.p3 .blk { height: 14rem; background: linear-gradient(180deg, #f0a875, #b45309); color: #6b2f05; }
+  .pod.p1.show .blk { box-shadow: 0 0 9rem rgba(255, 214, 10, .75); }
+  .pod.shake .blk { animation: podShake .09s linear infinite; }
+  @keyframes podShake { 0% { translate: -.4rem 0; } 50% { translate: .4rem 0; } 100% { translate: -.2rem 0; } }
+  .pod.empty { visibility: hidden; }
+  /* 오른쪽: 막타상·4위 이하 */
+  #resSide { position: absolute; right: 4rem; top: 20rem; width: 62rem; bottom: 4rem; text-align: left; opacity: 0; transform: translateX(20rem); transition: opacity .6s, transform .7s cubic-bezier(.2, 1.1, .4, 1); z-index: 2; }
+  #result.side #resSide { opacity: 1; transform: none; }
   #lastHit { background: linear-gradient(90deg, #7f1d1d, #b91c1c); border: .4rem solid #fecaca; border-radius: 2rem; padding: 1.6rem 2.4rem; font-size: 3.2rem; margin-bottom: 1.6rem; display: none; }
   #lastHit b { color: #ffe45c; font-size: 4rem; margin-left: 1rem; }
   #resList { background: rgba(14, 6, 40, .82); border: .4rem solid #4c2fb0; border-radius: 2rem; padding: 1rem 2.4rem; }
@@ -144,6 +177,17 @@
   #resList div:last-child { border: 0; }
   #resList .no { width: 7rem; white-space: nowrap; color: #a996e8; } #resList .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } #resList .sc { font-variant-numeric: tabular-nums; color: #ffd0dc; }
   #resPrize { margin-top: 1.6rem; font-size: 3rem; color: #ffd60a; text-align: center; }
+  #again { display: none; margin: 1.6rem auto 0; }
+  body.host #again { display: block; }
+
+  /* 진행자에게만 보이는 큰 버튼 */
+  .bigBtn { font: inherit; font-size: 3.4rem; font-weight: 900; color: #2a1500; padding: 1.4rem 4rem; border: 0; border-radius: 2.4rem; cursor: pointer;
+    background: linear-gradient(180deg, #ffe45c, #ffb300); box-shadow: 0 .8rem 0 #a35b00, 0 1.6rem 3rem rgba(255, 179, 0, .45); }
+  .bigBtn:hover { filter: brightness(1.08); } .bigBtn:active { transform: translateY(.5rem); box-shadow: 0 .3rem 0 #a35b00; }
+  .bigBtn small { font-size: 1.9rem; font-weight: 800; opacity: .65; margin-left: 1rem; }
+  #bigStart { display: none; position: absolute; left: 50%; top: 81.5rem; margin-left: -19rem; width: 38rem; z-index: 3; animation: startPulse 1.2s ease-in-out infinite alternate; }
+  body.host #bigStart { display: block; }
+  @keyframes startPulse { to { box-shadow: 0 .8rem 0 #a35b00, 0 0 5rem rgba(255, 214, 10, .9); } }
 
   /* ---------- 진행자 버튼 ---------- */
   #hostbar { position: absolute; right: 2rem; bottom: 1rem; z-index: 40; display: none; gap: .8rem; opacity: .35; transition: opacity .2s; }
@@ -160,29 +204,30 @@
   <div class="bg"></div><div class="grid"></div><div class="bgFever"></div><div class="bgAtk"></div>
 
   <header>
-    <div id="title">⚔ 보스 레이드</div>
+    <div id="title"><img class="ic" src="/img/ic_sword.webp" alt=""> 보스 레이드</div>
     <div id="people">참가자 <b id="pn">0</b>명</div>
   </header>
 
   <section id="lobby">
     <div class="qrCard">
       <div id="qr"></div>
-      <h2>📱 QR 찍고 입장!</h2>
+      <h2><img class="ic" src="/img/ic_phone.webp" alt=""> QR 찍고 입장!</h2>
       <div id="joinUrl"></div>
     </div>
     <div id="prize"></div>
     <div class="center">
       <div class="bubble">덤벼라, 인간들아!</div>
       <div class="boss" id="lobbyBoss"></div>
+      <button class="bigBtn" id="bigStart" data-a="start">▶ 게임 시작<small>Space</small></button>
     </div>
     <div class="right">
       <h3>입장한 용사 <b id="pn2">0</b>명</h3>
       <div id="chips"></div>
       <div id="more"></div>
       <div class="howto">
-        <div>① 화면을 <b>미친 듯이 연타</b>해서 공격</div>
-        <div>② <b>🔥 FEVER</b> 때는 데미지 <b>2배</b></div>
-        <div>③ 보스가 <i>빨개지면 손 떼기!</i> 건드리면 3초 기절</div>
+        <div><img class="ic" src="/img/ic_bolt.webp" alt=""> 화면을 <b>미친 듯이 연타</b>해서 공격</div>
+        <div><img class="ic" src="/img/ic_fire.webp" alt=""> <b>FEVER</b> 때는 데미지 <b>2배</b></div>
+        <div><img class="ic" src="/img/ic_hand.webp" alt=""> 보스가 <i>빨개지면 손 떼기!</i> 건드리면 3초 기절</div>
       </div>
     </div>
   </section>
@@ -190,7 +235,7 @@
   <section id="fight">
     <div class="left">
       <div class="hpWrap">
-        <div class="hpTop"><span id="bossName">보스<small>🔥 분노!</small></span><span id="hpNum"></span></div>
+        <div class="hpTop"><span id="bossName">보스<small><img class="ic" src="/img/ic_fire.webp" alt=""> 분노!</small></span><span id="hpNum"></span></div>
         <div class="hp"><i id="hpGhost"></i><i id="hpFill"></i></div>
       </div>
       <div id="bossZone"><div class="boss" id="boss"></div></div>
@@ -199,27 +244,29 @@
     </div>
     <div class="right">
       <div id="timer">60</div>
-      <div class="rankTitle"><span>🏆 실시간 랭킹</span><span>데미지</span></div>
+      <div class="rankTitle"><span><img class="ic" src="/img/ic_trophy.webp" alt=""> 실시간 랭킹</span><span>데미지</span></div>
       <div id="rank"></div>
     </div>
   </section>
 
   <section id="result">
-    <div id="resTitle"></div>
-    <div id="resSub"></div>
+    <div id="spot"><div class="beam b1"></div><div class="beam b2"></div></div>
+    <div id="resHead"><div id="resTitle"></div><div id="resSub"></div></div>
+    <div id="drum">두구두구두구… 영광의 1등은?!</div>
     <div id="podium"></div>
     <div id="resSide">
       <div id="lastHit"></div>
       <div id="resList"></div>
       <div id="resPrize"></div>
+      <button class="bigBtn" id="again" data-a="reset">다음 판 준비<small>R</small></button>
     </div>
+    <div id="flash"></div>
   </section>
 
   <div id="count"></div>
-  <canvas id="fx"></canvas>
   <div id="conn">서버 연결 끊김 — 다시 연결 중…</div>
   <div id="hostbar">
-    <button class="main" data-a="start">시작 (Space)</button>
+    <button data-a="start">시상 건너뛰기 (Space)</button>
     <button data-a="bots">연습용 봇 +10 (B)</button>
     <button data-a="reset">대기실로 (R)</button>
     <button data-a="csv">결과 저장 (S)</button>
@@ -227,6 +274,7 @@
     <button data-a="full">전체화면 (F)</button>
   </div>
 </div>
+<canvas id="fx"></canvas>
 
 <script src="/qrcode.js"></script>
 <script src="/boss.js"></script>
@@ -239,6 +287,10 @@
   $('lobbyBoss').innerHTML = bossHTML(false);
   $('boss').innerHTML = bossHTML(false);
   const bossEl = $('boss'), zone = $('bossZone');
+  const ic = (n) => '<img class="ic" src="/img/ic_' + n + '.webp" alt="">';
+  const U = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || innerHeight / 100; // 1rem 의 픽셀 크기
+  for (const n of ['medal1', 'medal2', 'medal3', 'party', 'clock', 'crown', 'stun', 'hand', 'warn']) new Image().src = '/img/ic_' + n + '.webp';
+  new Image().src = '/img/trophy_big.webp';
 
   let state = 'lobby', view = 'lobby', info = { bossName: '보스', title: '보스 레이드', prize: '' };
   let feverEnd = 0, atkStart = 0, atkEnd = 0, timeEnd = 0, countEnd = 0, lastCount = '', enraged = false;
@@ -248,10 +300,10 @@
   fetch('/info').then((r) => r.json()).then((i) => {
     info = i;
     document.title = i.title + ' — 진행 화면';
-    $('title').innerHTML = '⚔ ' + esc(i.title);
+    $('title').innerHTML = ic('sword') + ' ' + esc(i.title);
     $('bossName').firstChild.nodeValue = i.bossName;
-    $('prize').textContent = i.prize ? '🎁 ' + i.prize : '';
-    $('resPrize').textContent = i.prize ? '🎁 ' + i.prize : '';
+    $('prize').innerHTML = i.prize ? ic('gift') + ' ' + esc(i.prize) : '';
+    $('resPrize').innerHTML = i.prize ? ic('gift') + ' ' + esc(i.prize) : '';
     let url = qs.get('join') || location.origin;
     if (!qs.get('join') && /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && i.lan && i.lan[0]) url = i.lan[0];
     $('joinUrl').textContent = url.replace(/^https?:\/\//, '');
@@ -270,14 +322,14 @@
   }
   function act(a) {
     audioInit();
-    if (a === 'start') { if (state === 'lobby') admin('start'); else if (state === 'result') admin('reset'); }
+    if (a === 'start') { if (state === 'lobby') admin('start'); else if (state === 'result') cerSkip(); }
     else if (a === 'bots') admin('bots');
     else if (a === 'reset') { if (state !== 'fight' || confirm('전투 중입니다. 정말 대기실로 돌아갈까요?')) admin('reset'); }
     else if (a === 'csv') { if (key) location.href = '/results.csv?key=' + encodeURIComponent(key); }
     else if (a === 'mute') { muted = !muted; if (master) master.gain.value = muted ? 0 : 1; }
     else if (a === 'full') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); }
   }
-  $('hostbar').addEventListener('click', (e) => { const a = e.target.dataset && e.target.dataset.a; if (a) act(a); e.target.blur && e.target.blur(); });
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-a]'); if (b) { act(b.dataset.a); b.blur(); } });
   addEventListener('keydown', (e) => {
     if (e.repeat) return;
     const k = e.key.toLowerCase();
@@ -335,6 +387,10 @@
     win() { [523, 523, 523, 698, 0, 659, 698, 784, 1047].forEach((f, i) => f && tone(f, i === 8 ? 0.9 : 0.16, 'square', 0.11, i * 0.14)); [262, 330, 392].forEach((f) => tone(f, 1.2, 'triangle', 0.1, 1.12)); },
     lose() { [392, 370, 349, 262].forEach((f, i) => tone(f, i === 3 ? 0.9 : 0.3, 'sawtooth', 0.1, i * 0.3)); },
     boom() { tone(160, 1.1, 'sawtooth', 0.22, 0, 30); noise(1.1, 0.25, 0, 100); },
+    sting() { [392, 523, 659, 784].forEach((f, i) => tone(f, 0.7, 'square', 0.08, i * 0.05)); tone(98, 0.9, 'sawtooth', 0.14); },
+    rise() { tone(180, 0.8, 'sawtooth', 0.09, 0, 720); noise(0.7, 0.05, 0, 3000); },
+    reveal(i) { const f = [784, 659, 523][i] || 523; tone(f, 0.22, 'square', 0.11); tone(f * 1.5, 0.45, 'square', 0.1, 0.12); noise(0.25, 0.08, 0, 2500); },
+    drum(k) { noise(0.05, 0.1, 0, 500); tone(95 + k * 2, 0.06, 'triangle', 0.16); },
   };
   const BASS = [110, 110, 220, 110, 131, 131, 262, 131, 147, 147, 294, 147, 165, 165, 196, 220];
   function bgmTick() {
@@ -359,14 +415,14 @@
   function fit() { cv.width = innerWidth; cv.height = innerHeight; }
   addEventListener('resize', fit); fit();
   function sparks(x, y, n, color, power) {
-    const u = innerHeight / 100;
+    const u = U();
     for (let i = 0; i < n && parts.length < 500; i++) {
       const a = Math.random() * Math.PI * 2, v = (0.4 + Math.random()) * (power || 1) * u;
       parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - u * 0.5, g: u * 0.06, life: 1, d: 0.035 + Math.random() * 0.035, s: (0.22 + Math.random() * 0.4) * u, c: color, k: 0 });
     }
   }
   function confetti(n) {
-    const u = innerHeight / 100, cols = ['#ffd60a', '#ff3d81', '#3de8ff', '#a3ff5c', '#ffffff', '#c4a1ff'];
+    const u = U(), cols = ['#ffd60a', '#ff3d81', '#3de8ff', '#a3ff5c', '#ffffff', '#c4a1ff'];
     for (let i = 0; i < n && parts.length < 700; i++) {
       parts.push({ x: Math.random() * innerWidth, y: -Math.random() * innerHeight * 0.6, vx: (Math.random() - 0.5) * u * 0.6, vy: (0.4 + Math.random() * 0.8) * u, g: 0, life: 1, d: 0.003 + Math.random() * 0.002,
         s: (0.8 + Math.random() * 1.1) * u, c: cols[i % cols.length], k: 1, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3 });
@@ -429,12 +485,12 @@
     $('pn').textContent = m.n; $('pn2').textContent = m.n;
 
     if (m.s === 'lobby') {
-      if (prev !== 'lobby') { parts = []; bgm(false); clearRank(); }
+      if (prev !== 'lobby') { parts = []; bgm(false); clearRank(); cerClear(); }
       setView('lobby');
       chips(m.names || []);
     } else if (m.s === 'countdown') {
       if (prev !== 'countdown' || m.round !== lastRound) {
-        lastRound = m.round; lastCount = ''; enraged = false; feverEnd = atkEnd = 0; lastHp = m.max;
+        lastRound = m.round; lastCount = ''; enraged = false; feverEnd = atkEnd = 0; lastHp = m.max; cerClear();
         bossEl.classList.remove('dead', 'enraged', 'attack', 'warn', 'hurt');
         document.body.classList.remove('enraged');
         clearRank(); setHp(m.hp, m.max, true);
@@ -458,7 +514,7 @@
       setHp(m.hp, m.max);
       if (m.hits && m.hits.length) hitFx(m.hits);
       rank(m.top || []);
-      $('stunInfo').textContent = '💫 기절 ' + (m.stun || 0) + '명';
+      if ($('stunInfo').dataset.n !== String(m.stun || 0)) { $('stunInfo').dataset.n = String(m.stun || 0); $('stunInfo').innerHTML = ic('stun') + ' 기절 ' + (m.stun || 0) + '명'; }
       $('stunInfo').style.opacity = m.stun ? 1 : 0;
     } else if (m.s === 'result') {
       if (prev !== 'result') {
@@ -493,7 +549,11 @@
     bossEl.classList.toggle('warn', warn);
     bossEl.classList.toggle('attack', atk);
     if (atk && !atkSounded) { atkSounded = true; sfx.atk(); shake(500, 1.6); }
-    $('banner').textContent = atk ? '✋ 손 떼!! 터치 금지!' : warn ? '⚠ 반격 준비…' : fever ? '🔥 FEVER TIME! 데미지 ×2' : '';
+    const bn = atk ? 'atk' : warn ? 'warn' : fever ? 'fever' : '';
+    if ($('banner').dataset.k !== bn) {
+      $('banner').dataset.k = bn;
+      $('banner').innerHTML = atk ? ic('hand') + ' 손 떼!! 터치 금지!' : warn ? ic('warn') + ' 반격 준비…' : fever ? ic('fire') + ' FEVER TIME! 데미지 ×2' : '';
+    }
     if (state === 'countdown') {
       const left = countEnd - now;
       const txt = left > 900 ? String(Math.ceil(left / 1000 - 0.9)) : 'GO!';
@@ -591,7 +651,7 @@
       el.style.transform = 'translateY(' + i * 6.3 + 'rem)';
       el.classList.toggle('r1', i === 0);
       el.children[0].style.transform = 'scaleX(' + Math.max(0.04, r[2] / best) + ')';
-      el.children[1].textContent = i === 0 ? '👑' : i + 1;
+      if (el.dataset.no !== String(i)) { el.dataset.no = String(i); if (i === 0) el.children[1].innerHTML = ic('crown'); else el.children[1].textContent = i + 1; }
       el.children[3].textContent = r[2].toLocaleString();
     });
     for (const [pid, el] of rows) if (!seen.has(pid)) { el.remove(); rows.delete(pid); }
@@ -617,36 +677,40 @@
     $('more').textContent = names.length > chipMap.size ? '…외 ' + (names.length - chipMap.size) + '명' : '';
   }
 
-  // ---------- 결과 ----------
+  // ---------- 결과(시상식) ----------
+  // 순서: 제목 → 시상대 솟아오름 → 3위 → 2위 → 북소리와 스포트라이트 → 1위 → 막타상·나머지 순위
+  const R = $('result');
+  const pods = {};
   function buildResult(m) {
     const list = m.rank || [];
     const total = list.reduce((a, r) => a + r[2], 0);
-    $('resTitle').textContent = m.win ? '🎉 토벌 성공!' : '⏰ 보스가 도망쳤다…';
+    $('resTitle').innerHTML = m.win ? ic('party') + ' 토벌 성공!' : ic('clock') + ' 보스가 도망쳤다…';
     $('resSub').innerHTML = m.win
       ? '<b>' + (m.clear / 1000).toFixed(1) + '초</b> 만에 격파 · ' + m.n + '명이 총 <b>' + total.toLocaleString() + '</b> 데미지'
       : '남은 체력 <b>' + m.hp.toLocaleString() + '</b> · ' + m.n + '명이 총 <b>' + total.toLocaleString() + '</b> 데미지';
     const pod = $('podium');
     pod.textContent = '';
-    const medals = ['🥇', '🥈', '🥉'];
     [1, 0, 2].forEach((i) => {
       const r = list[i];
       const d = document.createElement('div');
-      d.className = 'pod p' + (i + 1);
-      if (r && r[2] > 0) {
-        d.innerHTML = '<div class="medal"></div><div class="pn"></div><div class="ps"></div><div class="blk"></div>';
-        d.children[0].textContent = medals[i];
-        d.children[1].textContent = r[1];
-        d.children[2].textContent = r[2].toLocaleString();
-        d.children[3].textContent = i + 1;
+      const ok = r && r[2] > 0;
+      d.className = 'pod p' + (i + 1) + (ok ? '' : ' empty');
+      d.innerHTML = '<div class="top"><img class="award" alt=""><div class="pn"></div><div class="ps"></div></div><div class="blk">?</div>';
+      if (ok) {
+        d.querySelector('.award').src = i === 0 ? '/img/trophy_big.webp' : '/img/ic_medal' + (i + 1) + '.webp';
+        d.querySelector('.pn').textContent = r[1];
+        if (Array.from(r[1]).length > 7) d.querySelector('.pn').classList.add('long'); // 긴 닉네임은 옆 시상대를 침범하지 않게 축소
+        d.querySelector('.ps').textContent = r[2].toLocaleString();
       }
+      pods[i] = ok ? d : null;
       pod.appendChild(d);
     });
     const lh = $('lastHit');
-    if (m.last) { lh.style.display = 'block'; lh.textContent = '⚔ 막타상'; const b = document.createElement('b'); b.textContent = m.last.name; lh.appendChild(b); }
+    if (m.last) { lh.style.display = 'block'; lh.innerHTML = ic('sword') + ' 막타상'; const b = document.createElement('b'); b.textContent = m.last.name; lh.appendChild(b); }
     else lh.style.display = 'none';
     const box = $('resList');
     box.textContent = '';
-    list.slice(3, m.last ? 9 : 10).forEach((r, i) => {
+    list.slice(3, m.last ? 8 : 9).forEach((r, i) => {
       if (r[2] <= 0) return;
       const d = document.createElement('div');
       d.innerHTML = '<span class="no"></span><span class="nm"></span><span class="sc"></span>';
@@ -657,15 +721,66 @@
     });
     box.style.display = box.childElementCount ? 'block' : 'none';
   }
-  let confTimer = null;
+
+  const cer = { steps: [], i: 0, timer: null, running: false };
+  let confTimer = null, drumTimer = null;
+  function drumStop() { clearInterval(drumTimer); drumTimer = null; }
+  function cerClear() {
+    clearTimeout(cer.timer); clearInterval(confTimer); drumStop();
+    cer.running = false; cer.steps = [];
+    R.className = '';
+  }
+  function cerNext() {
+    if (!cer.running) return;
+    if (cer.i >= cer.steps.length) { cer.running = false; return; }
+    cer.steps[cer.i++][1]();
+    if (cer.i >= cer.steps.length) { cer.running = false; return; }
+    cer.timer = setTimeout(cerNext, cer.steps[cer.i][0]);
+  }
+  // Space: 남은 연출을 건너뛰고 최종 화면으로
+  function cerSkip() {
+    if (!cer.running) return false;
+    clearTimeout(cer.timer);
+    while (cer.i < cer.steps.length) cer.steps[cer.i++][1]();
+    cer.running = false;
+    return true;
+  }
+  function reveal(i) {
+    const d = pods[i];
+    if (!d) return;
+    d.classList.remove('shake');
+    d.classList.add('show');
+    d.querySelector('.blk').textContent = i + 1;
+    const r = d.getBoundingClientRect();
+    sparks(r.left + r.width / 2, r.top + r.height * 0.3, i === 0 ? 90 : 40, ['#ffd60a', '#e5e7eb', '#f0a875'][i], i === 0 ? 2.6 : 1.6);
+  }
   function openResult(m) {
     setView('result');
-    clearInterval(confTimer);
-    if (m.win) {
-      sfx.win(); confetti(260);
-      let n = 0;
-      confTimer = setInterval(() => { if (state !== 'result' || ++n > 12) return clearInterval(confTimer); confetti(90); }, 900);
-    } else { sfx.lose(); confetti(60); }
+    cerClear();
+    R.className = 'intro';
+    const st = [];
+    st.push([0, () => { if (m.win) { sfx.sting(); confetti(140); } else sfx.lose(); }]);
+    st.push([2600, () => { R.classList.remove('intro'); R.classList.add('stage'); sfx.rise(); }]);
+    if (pods[2]) st.push([1600, () => { reveal(2); sfx.reveal(2); }]);
+    if (pods[1]) st.push([1700, () => { reveal(1); sfx.reveal(1); }]);
+    if (pods[0]) {
+      st.push([1600, () => {
+        R.classList.add('drum'); pods[0].classList.add('shake');
+        let k = 0; drumStop(); drumTimer = setInterval(() => sfx.drum(k++), 62);
+      }]);
+      st.push([2700, () => {
+        drumStop();
+        R.classList.remove('drum'); R.classList.add('crowned');
+        reveal(0); sfx.win(); shake(700, 1.6); confetti(340);
+        $('flash').animate([{ opacity: 0.85 }, { opacity: 0 }], { duration: 650, easing: 'ease-out' });
+        let n = 0;
+        clearInterval(confTimer);
+        confTimer = setInterval(() => { if (state !== 'result' || ++n > 14) return clearInterval(confTimer); confetti(90); }, 850);
+      }]);
+    }
+    st.push([1800, () => R.classList.add('side')]);
+    cer.steps = st; cer.i = 0; cer.running = true;
+    cerNext();
   }
 
   function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
