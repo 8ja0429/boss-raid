@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d0620">
+<title>보스 레이드</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body {
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    font-weight: 800; color: #fff; background: #0d0620;
+    -webkit-user-select: none; user-select: none; touch-action: none;
+  }
+  .view { position: fixed; inset: 0; display: none; flex-direction: column;
+    padding: max(14px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom)); }
+  .view.on { display: flex; }
+  .bg { position: fixed; inset: 0; z-index: -1; background: #0d0620 url(/img/bg_arena_s.webp) 47% 100% / cover no-repeat; }
+  .bg::before, .bg::after { content: ""; position: absolute; inset: 0; transition: opacity .3s; }
+  .bg::before { background: linear-gradient(180deg, rgba(13, 6, 32, .85) 0%, rgba(13, 6, 32, .3) 35%, rgba(13, 6, 32, .25) 65%, rgba(13, 6, 32, .9) 100%); }
+  .bg::after { opacity: 0; }
+  body.fever .bg::after { opacity: 1; background: radial-gradient(90% 60% at 50% 50%, rgba(255, 190, 0, .55), rgba(120, 50, 0, .35)); }
+  body.atk .bg::after { opacity: 1; background: radial-gradient(90% 60% at 50% 50%, rgba(255, 20, 20, .6), rgba(60, 0, 0, .75)); }
+
+  /* ---- 입장 ---- */
+  #join { align-items: center; justify-content: center; gap: 14px; text-align: center; touch-action: auto; }
+  #join .boss { width: 56vw; max-width: 260px; aspect-ratio: 1; }
+  #join h1 { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -.5px;
+    background: linear-gradient(180deg, #fff, #ffd60a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #join p { margin: 0; color: #c9b8ff; font-size: 15px; font-weight: 600; }
+  #name { width: 100%; max-width: 320px; font: inherit; font-size: 22px; text-align: center; color: #fff;
+    padding: 14px; border-radius: 16px; border: 2px solid #6d4bd8; background: #1a0d3a; outline: none;
+    -webkit-user-select: text; user-select: text; }
+  #name:focus { border-color: #ffd60a; }
+  #go { width: 100%; max-width: 320px; font: inherit; font-size: 22px; font-weight: 900; color: #2a1500;
+    padding: 16px; border: 0; border-radius: 16px; background: linear-gradient(180deg, #ffe45c, #ffb300);
+    box-shadow: 0 6px 0 #a35b00, 0 12px 24px rgba(255, 179, 0, .35); }
+  #go:active { transform: translateY(4px); box-shadow: 0 2px 0 #a35b00; }
+  #joinErr { color: #ff8a8a; font-size: 14px; min-height: 18px; }
+
+  /* ---- 플레이 ---- */
+  #play { padding-left: 0; padding-right: 0; }
+  .top { padding: 0 16px; }
+  .top .row { display: flex; justify-content: space-between; align-items: baseline; }
+  #bossName { font-size: 17px; font-weight: 900; }
+  #timer { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; color: #ffd60a; }
+  .hp { position: relative; height: 18px; margin-top: 6px; border-radius: 9px; background: #1c0f3d; border: 2px solid #000; overflow: hidden; }
+  .hp i { position: absolute; inset: 0; transform-origin: left; border-radius: 6px; }
+  #hpGhost { background: #fff; transition: transform .7s ease-out .15s; }
+  #hpFill { background: linear-gradient(180deg, #ff6b9a, #e11d48); transition: transform .18s linear; }
+  #arena { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #arena .boss { width: min(92vw, 56vh); aspect-ratio: 1; pointer-events: none; }
+  #msg { position: absolute; left: 0; right: 0; top: 4%; text-align: center; font-size: 26px; font-weight: 900;
+    text-shadow: 0 3px 0 #000, 0 0 18px rgba(0,0,0,.6); pointer-events: none; padding: 0 12px; line-height: 1.25; }
+  #msg small { display: block; font-size: 15px; font-weight: 700; color: #d9ccff; margin-top: 6px; }
+  body.fever #msg { color: #ffe45c; animation: pulse .35s ease-in-out infinite alternate; }
+  body.warn #msg { color: #ffb020; animation: pulse .2s ease-in-out infinite alternate; }
+  body.atk #msg { color: #ff5252; font-size: 34px; }
+  @keyframes pulse { to { transform: scale(1.08); } }
+  #count { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    font-size: 40vw; font-weight: 900; color: #ffd60a; text-shadow: 0 8px 0 #7a4b00; pointer-events: none; }
+  #stun { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(10, 4, 24, .82); font-size: 34px; font-weight: 900; pointer-events: none; z-index: 5; }
+  #stun b { font-size: 70px; animation: spin 1s linear infinite; display: block; }
+  #stun small { font-size: 16px; color: #c9b8ff; margin-top: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .float { position: absolute; font-size: 30px; font-weight: 900; color: #fff; pointer-events: none;
+    text-shadow: 0 2px 0 #000, 0 0 10px #ff3d81; will-change: transform, opacity; z-index: 3; }
+  .float.f2 { color: #ffe45c; font-size: 40px; text-shadow: 0 2px 0 #000, 0 0 14px #ff9d00; }
+  .ring { position: absolute; width: 70px; height: 70px; margin: -35px 0 0 -35px; border-radius: 50%;
+    border: 4px solid #fff; pointer-events: none; z-index: 2; }
+  .bottom { display: flex; gap: 10px; padding: 0 16px; }
+  .stat { flex: 1; background: rgba(20, 10, 50, .8); border: 2px solid #3a2380; border-radius: 16px; padding: 10px 12px; text-align: center; }
+  .stat span { display: block; font-size: 12px; font-weight: 700; color: #a996e8; }
+  .stat b { display: block; font-size: 28px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  #myRank { color: #ffd60a; }
+  #conn { position: fixed; left: 50%; top: 4px; transform: translateX(-50%); font-size: 12px; background: #b91c1c;
+    padding: 3px 10px; border-radius: 10px; display: none; z-index: 10; }
+
+  /* ---- 결과 ---- */
+  #result { align-items: center; justify-content: center; text-align: center; gap: 10px; }
+  #resTitle { font-size: 30px; font-weight: 900; }
+  #resRank { font-size: 92px; font-weight: 900; line-height: 1; color: #ffd60a; text-shadow: 0 6px 0 #7a4b00; }
+  #resRank small { font-size: 34px; }
+  #resDmg { font-size: 20px; color: #d9ccff; }
+  #resNote { font-size: 18px; color: #ffe45c; min-height: 24px; }
+  #resTop { width: 100%; max-width: 340px; margin-top: 10px; background: rgba(20, 10, 50, .8); border: 2px solid #3a2380; border-radius: 16px; padding: 8px 14px; }
+  #resTop div { display: flex; justify-content: space-between; padding: 7px 0; font-size: 18px; border-bottom: 1px solid #2c1a66; }
+  #resTop div:last-child { border: 0; }
+  #resTop .me { color: #ffd60a; }
+  #resWait { font-size: 14px; color: #a996e8; font-weight: 600; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="bg"></div>
+<div id="conn">연결 중…</div>
+
+<section id="join" class="view on">
+  <div class="boss" id="joinBoss"></div>
+  <h1 id="title">보스 레이드</h1>
+  <p>다 같이 연타해서 보스를 쓰러뜨리세요!</p>
+  <input id="name" maxlength="10" placeholder="닉네임 (최대 10자)" autocomplete="off" enterkeyhint="go">
+  <button id="go">입장하기</button>
+  <div id="joinErr"></div>
+</section>
+
+<section id="play" class="view">
+  <div class="top">
+    <div class="row"><span id="bossName">보스</span><span id="timer"></span></div>
+    <div class="hp"><i id="hpGhost"></i><i id="hpFill"></i></div>
+  </div>
+  <div id="arena">
+    <div class="boss" id="boss"></div>
+    <div id="msg"></div>
+    <div id="count"></div>
+    <div id="stun"><b>💫</b>기절!<small>보스가 빨갈 땐 손을 떼세요</small></div>
+  </div>
+  <div class="bottom">
+    <div class="stat"><span>내 데미지</span><b id="myScore">0</b></div>
+    <div class="stat"><span>내 순위</span><b id="myRank">-</b></div>
+  </div>
+</section>
+
+<section id="result" class="view">
+  <div id="resTitle"></div>
+  <div id="resRank"></div>
+  <div id="resDmg"></div>
+  <div id="resNote"></div>
+  <div id="resTop"></div>
+  <div id="resWait">다음 판이 시작되면 자동으로 넘어갑니다</div>
+</section>
+
+<script src="/boss.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+  let id = store.get('raidId');
+  if (!id) {
+    id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+    store.set('raidId', id);
+  }
+
+  $('joinBoss').innerHTML = bossHTML(true);
+  $('boss').innerHTML = bossHTML(true);
+  const bossEl = $('boss'), arena = $('arena'), msg = $('msg');
+
+  let me = null;          // {pid, name}
+  let state = 'lobby';
+  let serverScore = 0, pending = 0, inflight = 0, myRank = 0;
+  let feverEnd = 0, atkStart = 0, atkEnd = 0, timeEnd = 0, countEnd = 0, stunUntil = 0;
+  let es = null, lastRound = -1, floats = 0, info = { bossName: '보스' };
+
+  fetch('/info').then((r) => r.json()).then((i) => {
+    info = i;
+    $('title').textContent = i.title;
+    $('bossName').textContent = i.bossName;
+    document.title = i.title;
+  }).catch(() => {});
+
+  function post(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true })
+      .then((r) => r.json().then((j) => ({ status: r.status, j })));
+  }
+  function show(v) {
+    for (const s of document.querySelectorAll('.view')) s.classList.toggle('on', s.id === v);
+  }
+
+  // ---------- 입장 ----------
+  const nameInput = $('name');
+  nameInput.value = store.get('raidName') || '';
+  function join(silent) {
+    const name = nameInput.value.trim();
+    if (!name && !silent) { $('joinErr').textContent = '닉네임을 입력해 주세요'; nameInput.focus(); return; }
+    $('go').disabled = true;
+    post('/join', { id, name }).then(({ status, j }) => {
+      $('go').disabled = false;
+      if (status !== 200) { $('joinErr').textContent = status === 503 ? '정원이 가득 찼어요' : '입장에 실패했어요. 다시 시도해 주세요'; return; }
+      me = j;
+      serverScore = j.score || 0;
+      store.set('raidName', j.name);
+      show(state === 'result' ? 'result' : 'play');
+      connect();
+      try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
+    }).catch(() => { $('go').disabled = false; $('joinErr').textContent = '서버에 연결할 수 없어요'; });
+  }
+  $('go').addEventListener('click', () => join(false));
+  nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') join(false); });
+  if (nameInput.value) join(true); // 새로고침해도 이어서 플레이
+
+  // ---------- 실시간 수신 ----------
+  let gotLive = false, pollTimer = null, lastQ = -1;
+  function connect() {
+    if (pollTimer) return;
+    if (es) es.close();
+    gotLive = false;
+    es = new EventSource('/events?id=' + encodeURIComponent(id));
+    es.onerror = () => { if (!pollTimer) $('conn').style.display = 'block'; };
+    es.onmessage = (e) => { gotLive = true; $('conn').style.display = 'none'; try { onMsg(JSON.parse(e.data)); } catch (err) {} };
+    // 2.5초 안에 아무것도 안 오면 실시간 연결이 막힌 환경 → 주기 조회로 전환
+    setTimeout(() => { if (!gotLive) startPoll(); }, 2500);
+  }
+  function startPoll() {
+    if (pollTimer) return;
+    if (es) { es.close(); es = null; }
+    let busy = false;
+    pollTimer = setInterval(() => {
+      if (busy) return;
+      busy = true;
+      fetch('/state?id=' + encodeURIComponent(id), { cache: 'no-store' }).then((r) => r.json())
+        .then((m) => { busy = false; $('conn').style.display = 'none'; onMsg(m); })
+        .catch(() => { busy = false; $('conn').style.display = 'block'; });
+    }, 250);
+  }
+
+  function onMsg(m) {
+    if (m.q === lastQ) return;
+    lastQ = m.q;
+    const now = performance.now();
+    const prev = state;
+    state = m.s;
+    if (m.s === 'countdown' && (prev !== 'countdown' || m.round !== lastRound)) {
+      lastRound = m.round;
+      serverScore = 0; pending = 0; myRank = 0; stunUntil = 0; feverEnd = atkEnd = 0;
+      bossEl.classList.remove('dead', 'enraged', 'hurt');
+      show('play');
+    }
+    if (m.s === 'countdown') countEnd = now + m.t;
+    if (m.s === 'lobby' && prev !== 'lobby') {
+      serverScore = 0; pending = 0; myRank = 0;
+      bossEl.classList.remove('dead', 'enraged', 'hurt');
+      show('play');
+    }
+    if (m.max) setHp(m.hp / m.max);
+    if (m.s === 'fight') {
+      if (prev === 'result') show('play');
+      timeEnd = now + m.t;
+      feverEnd = m.fever > 0 ? now + m.fever : 0;
+      if (m.ae > 0) {
+        if (!(atkEnd > now)) { atkStart = now + m.aw; atkEnd = now + m.ae; }
+      } else if (atkEnd - now < 300) atkEnd = 0;
+      bossEl.classList.toggle('enraged', !!m.enr);
+    }
+    if (m.s === 'result' && prev !== 'result') showResult(m);
+    ui();
+  }
+
+  function setHp(r) {
+    const s = 'scaleX(' + Math.max(0, Math.min(1, r)) + ')';
+    $('hpFill').style.transform = s;
+    $('hpGhost').style.transform = s;
+  }
+
+  // ---------- 화면 갱신 (0.1초마다) ----------
+  function ui() {
+    if (!me) return;
+    const now = performance.now();
+    const fever = state === 'fight' && now < feverEnd;
+    const warn = state === 'fight' && atkEnd > now && now < atkStart;
+    const atk = state === 'fight' && atkEnd > now && now >= atkStart;
+    const stunned = state === 'fight' && now < stunUntil;
+    document.body.classList.toggle('fever', fever && !atk);
+    document.body.classList.toggle('warn', warn);
+    document.body.classList.toggle('atk', atk);
+    bossEl.classList.toggle('warn', warn);
+    bossEl.classList.toggle('attack', atk);
+    $('stun').style.display = stunned ? 'flex' : 'none';
+    $('count').style.display = state === 'countdown' ? 'flex' : 'none';
+
+    if (state === 'lobby') {
+      msg.innerHTML = esc(me.name) + ' 님, 입장 완료!<small>곧 시작합니다. 앞 화면을 봐 주세요<br>보스가 <b style="color:#ff6b6b">빨갛게</b> 변하면 손을 떼야 해요</small>';
+      $('timer').textContent = '';
+    } else if (state === 'countdown') {
+      const left = countEnd - now;
+      $('count').textContent = left > 900 ? Math.ceil(left / 1000 - 0.9) : 'GO!';
+      msg.textContent = '';
+    } else if (state === 'fight') {
+      $('timer').textContent = Math.max(0, (timeEnd - now) / 1000).toFixed(1);
+      if (atk) msg.textContent = '✋ 터치 금지!';
+      else if (warn) msg.textContent = '⚠ 반격 온다! 손 뗄 준비';
+      else if (fever) msg.textContent = '🔥 FEVER! 데미지 2배';
+      else msg.textContent = '연타! 연타! 연타!';
+    }
+    $('myScore').textContent = (serverScore + (pending + inflight) * 1).toLocaleString();
+    $('myRank').textContent = myRank ? myRank + '위' : '-';
+  }
+  setInterval(ui, 100);
+
+  // ---------- 터치 ----------
+  function tap(x, y) {
+    if (!me || state !== 'fight') {
+      if (me && state === 'lobby') poke(x, y, '', false);
+      return;
+    }
+    const now = performance.now();
+    if (now < stunUntil) return;
+    if (atkEnd > now && now >= atkStart + 150) { // 반격 중에 건드림 → 기절
+      stunUntil = now + 3000;
+      post('/stun', { id }).catch(() => {});
+      if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+      ui();
+      return;
+    }
+    const fever = now < feverEnd;
+    pending++;
+    poke(x, y, fever ? '+2' : '+1', fever);
+    if (navigator.vibrate) navigator.vibrate(8);
+  }
+
+  function poke(x, y, text, big) {
+    const r = arena.getBoundingClientRect();
+    const px = x - r.left, py = y - r.top;
+    bossHit(bossEl);
+    if (floats > 28) return;
+    floats++;
+    const ring = document.createElement('div');
+    ring.className = 'ring';
+    ring.style.left = px + 'px'; ring.style.top = py + 'px';
+    arena.appendChild(ring);
+    ring.animate([{ transform: 'scale(.3)', opacity: .9 }, { transform: 'scale(1.5)', opacity: 0 }], { duration: 260, easing: 'ease-out' })
+      .onfinish = () => ring.remove();
+    if (!text) { floats--; return; }
+    const f = document.createElement('div');
+    f.className = 'float' + (big ? ' f2' : '');
+    f.textContent = text;
+    f.style.left = (px - 16 + (Math.random() * 30 - 15)) + 'px';
+    f.style.top = (py - 40) + 'px';
+    arena.appendChild(f);
+    const dx = Math.random() * 60 - 30;
+    f.animate(
+      [{ transform: 'translate(0,0) scale(.6)', opacity: 1 }, { transform: 'translate(' + dx * .5 + 'px,-50px) scale(1.25)', opacity: 1, offset: .3 }, { transform: 'translate(' + dx + 'px,-120px) scale(1)', opacity: 0 }],
+      { duration: 620, easing: 'ease-out' }
+    ).onfinish = () => { f.remove(); floats--; };
+  }
+
+  arena.addEventListener('pointerdown', (e) => { e.preventDefault(); tap(e.clientX, e.clientY); });
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+  document.addEventListener('dblclick', (e) => e.preventDefault());
+  document.addEventListener('touchmove', (e) => { if (me) e.preventDefault(); }, { passive: false });
+
+  // 모은 터치를 0.25초마다 서버로 전송
+  setInterval(() => {
+    if (!me || pending <= 0 || state !== 'fight') { if (state !== 'fight') pending = 0; return; }
+    const n = pending;
+    pending = 0; inflight += n;
+    post('/tap', { id, n }).then(({ status, j }) => {
+      inflight -= n;
+      if (status === 404) { join(true); return; }
+      if (typeof j.score === 'number') serverScore = j.score;
+      if (j.rank) myRank = j.rank;
+    }).catch(() => { inflight -= n; });
+  }, 250);
+
+  // ---------- 결과 ----------
+  function showResult(m) {
+    pending = 0;
+    document.body.classList.remove('fever', 'warn', 'atk');
+    bossEl.classList.remove('warn', 'attack');
+    if (m.win) bossEl.classList.add('dead');
+    const list = m.rank || [];
+    const idx = me ? list.findIndex((r) => r[0] === me.pid) : -1;
+    const mine = idx >= 0 ? list[idx] : null;
+    $('resTitle').textContent = m.win ? '🎉 토벌 성공!' : '⏰ 보스가 도망쳤다…';
+    $('resRank').innerHTML = mine ? (idx + 1) + '<small>위</small>' : '-';
+    $('resDmg').textContent = mine ? '내 데미지 ' + mine[2].toLocaleString() + (list.length ? ' · ' + m.n + '명 참가' : '') : '';
+    let note = '';
+    if (idx === 0) note = '🏆 1등! 이 화면을 강사님께 보여주세요';
+    else if (idx > 0 && idx < 3) note = '🥈 시상대 입성!';
+    if (m.last && me && m.last.pid === me.pid) note += (note ? ' · ' : '') + '⚔ 막타의 주인공!';
+    $('resNote').textContent = note;
+    const top = $('resTop');
+    top.textContent = '';
+    const medals = ['🥇', '🥈', '🥉'];
+    list.slice(0, 3).forEach((r, i) => {
+      const d = document.createElement('div');
+      if (me && r[0] === me.pid) d.className = 'me';
+      const a = document.createElement('span'); a.textContent = medals[i] + ' ' + r[1];
+      const b = document.createElement('span'); b.textContent = r[2].toLocaleString();
+      d.append(a, b); top.appendChild(d);
+    });
+    setTimeout(() => { if (state === 'result' && me) show('result'); }, m.win ? 1600 : 400);
+    if (navigator.vibrate) navigator.vibrate(idx === 0 ? [100, 50, 100, 50, 300] : 200);
+  }
+
+  function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+})();
+</script>
+</body>
+</html>

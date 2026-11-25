@@ -1,0 +1,10 @@
+{
+  "title": "강의 전 보스 레이드",
+  "bossName": "버그 대마왕",
+  "prize": "1등에게 상품 증정!",
+  "port": 3000,
+  "durationSec": 60,
+  "hpPerPlayer": 250,
+  "minHp": 500,
+  "adminKey": ""
+}

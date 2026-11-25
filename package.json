@@ -1,0 +1,13 @@
+{
+  "name": "boss-raid",
+  "version": "1.0.0",
+  "private": true,
+  "description": "강의 전 보스 레이드 — 수강생 전원이 폰으로 연타해 보스를 잡는 실시간 게임",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
