@@ -27,6 +27,24 @@ const PORT = Number(process.env.PORT) || cfg.port;
 const THEME = /^[a-z0-9]+$/.test(process.env.THEME || cfg.theme || '') ? process.env.THEME || cfg.theme : 'bug';
 const STORY = THEME === 'king';
 const BOSS_NAME = process.env.BOSS_NAME || cfg.bossName;
+// 리듬 모드: 난타 사이사이에 박자 구간이 끼어든다 (king 테마 기본, RHYTHM=0/1 로 강제 가능)
+const RHYTHM = process.env.RHYTHM === undefined ? THEME === 'king' : /^(1|true)$/.test(process.env.RHYTHM);
+const DURATION = RHYTHM ? 90 : cfg.durationSec; // 초
+const HP_PER_PLAYER = RHYTHM ? cfg.hpPerPlayerRhythm || 470 : cfg.hpPerPlayer;
+const LEAD_MS = 1500; // 박자 구간에 들어가서 첫 박자까지의 준비 시간
+// 구간표: [종류, 시작초, 끝초, 박자 간격(ms), PERFECT 점수, GOOD 점수]. 박자 간격이 있으면 박자 구간
+const SEGS = RHYTHM
+  ? [
+      ['mash', 0, 18],
+      ['r4', 18, 30, 500, 5, 3], // 정박: 원·투·쓰리·포
+      ['mash', 30, 45],
+      ['slow', 45, 59, 1200, 12, 7], // 느린 비트: 빨리 치고 싶어도 참아야 한다
+      ['mash', 59, 70],
+      ['r3', 70, 80, 400, 4, 2], // 삼박자: 쿵·짝·짝
+      ['frenzy', 80, 90], // 마지막 광란: 데미지 2배
+    ]
+  : null;
+const isRhythm = (sg) => !!sg && sg.length > 3;
 const ADMIN_KEY = String(process.env.ADMIN_KEY || cfg.adminKey || crypto.randomBytes(3).toString('hex'));
 let lastCsv = ''; // 마지막 판 결과 (진행 화면에서 내려받기용)
 
@@ -50,6 +68,8 @@ const G = {
   atkFrom: 0,
   atkUntil: 0,
   nextAtk: 0,
+  t0: 0, // 전투 시작 시각
+  lastTick: 0,
   win: false,
   lastHit: null,
   clearMs: 0,
@@ -63,6 +83,22 @@ let lastPayload = ''; // 마지막 전송 내용 (실시간 연결이 막힌 환
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const enraged = () => G.state === 'fight' && G.hp <= G.max / 2;
+
+function segIndexAt(t) {
+  if (!SEGS || G.state !== 'fight') return -1;
+  const sec = (t - G.t0) / 1000;
+  for (let i = 0; i < SEGS.length; i++) if (sec >= SEGS[i][1] && sec < SEGS[i][2]) return i;
+  return -1;
+}
+const segAt = (t) => (SEGS ? SEGS[segIndexAt(t)] || null : null);
+// 박자 구간 sg 에서 시각 a 초과 b 이하 사이에 지나간 박자 수
+function beatsBetween(sg, a, b) {
+  const origin = G.t0 + sg[1] * 1000 + LEAD_MS;
+  const end = G.t0 + sg[2] * 1000;
+  const k = (t) => Math.floor((Math.min(t, end - 1) - origin) / sg[3]);
+  return Math.max(0, k(b) - Math.max(-1, k(a)));
+}
+const mult = (now) => (now < G.feverUntil ? 2 : 1);
 
 function activePlayers() {
   let n = 0;
@@ -100,7 +136,7 @@ function startRound() {
     p.stuns = 0;
   }
   G.round++;
-  G.max = Math.max(cfg.minHp, Math.round(activePlayers() * cfg.hpPerPlayer));
+  G.max = Math.max(cfg.minHp, Math.round(activePlayers() * HP_PER_PLAYER));
   G.hp = G.max;
   G.win = false;
   G.lastHit = null;
@@ -112,8 +148,10 @@ function startRound() {
 
 function beginFight(now) {
   G.state = 'fight';
-  G.endsAt = now + cfg.durationSec * 1000;
-  G.nextFever = now + rand(9000, 13000);
+  G.t0 = now;
+  G.lastTick = now;
+  G.endsAt = now + DURATION * 1000;
+  G.nextFever = RHYTHM ? Infinity : now + rand(9000, 13000); // 리듬 모드의 2배 구간은 마지막 광란 하나뿐
   G.nextAtk = now + rand(5000, 7000);
 }
 
@@ -122,7 +160,7 @@ function finish(win, lastHitter) {
   G.state = 'result';
   G.win = win;
   G.lastHit = lastHitter ? { pid: lastHitter.pid, name: lastHitter.name } : null;
-  G.clearMs = cfg.durationSec * 1000 - Math.max(0, G.endsAt - now);
+  G.clearMs = DURATION * 1000 - Math.max(0, G.endsAt - now);
   G.hp = Math.max(0, G.hp);
   rebuildRanking();
   saveCsv();
@@ -140,9 +178,9 @@ function resetToLobby() {
   broadcast();
 }
 
-function applyDamage(p, taps, now) {
-  if (G.state !== 'fight' || taps <= 0) return;
-  const dmg = taps * (now < G.feverUntil ? 2 : 1);
+// dmg: 이미 배율까지 계산된 데미지
+function applyDamage(p, dmg, now) {
+  if (G.state !== 'fight' || dmg <= 0) return;
   p.score += dmg;
   p.scoreAt = now;
   G.hp -= dmg;
@@ -155,8 +193,11 @@ function applyDamage(p, taps, now) {
 function tick() {
   const now = Date.now();
   if (G.state === 'countdown' && now >= G.startsAt) beginFight(now);
+  const sg = G.state === 'fight' ? segAt(now) : null;
+  if (sg && sg[0] === 'frenzy') G.feverUntil = G.endsAt;
   if (G.state === 'fight') {
     const inAtk = now >= G.atkFrom && now < G.atkUntil;
+    const beats = isRhythm(sg) ? beatsBetween(sg, G.lastTick, now) : 0;
     for (const p of players.values()) {
       if (!p.bot || G.state !== 'fight') continue;
       if (now < p.stunUntil) continue;
@@ -165,15 +206,29 @@ function tick() {
         continue;
       }
       if (inAtk) continue;
-      applyDamage(p, Math.floor(rand(0, p.skill)), now);
+      if (isRhythm(sg)) {
+        // 박자 구간: 박자마다 봇의 정확도에 따라 PERFECT / GOOD / MISS
+        let d = 0;
+        for (let i = 0; i < beats; i++) {
+          const r = Math.random();
+          d += r < p.acc ? sg[4] : r < p.acc + 0.3 ? sg[5] : 0;
+        }
+        applyDamage(p, d, now);
+      } else applyDamage(p, Math.floor(rand(0, p.skill)) * mult(now), now);
     }
   }
+  G.lastTick = now;
   if (G.state === 'fight') {
     if (now >= G.nextAtk) {
-      const fast = enraged();
-      G.atkFrom = now + 1500;
-      G.atkUntil = G.atkFrom + (fast ? 2600 : 2000);
-      G.nextAtk = G.atkUntil + (fast ? rand(4000, 7000) : rand(7000, 11000));
+      // 리듬 모드에서는 난타 구간에서만, 구간이 끝나기 전에 반격이 끝날 수 있을 때만 반격한다
+      const ok = !SEGS || (sg && sg[0] === 'mash' && G.t0 + sg[2] * 1000 - now >= 4800);
+      if (!ok) G.nextAtk = now + 1000;
+      else {
+        const fast = enraged();
+        G.atkFrom = now + 1500;
+        G.atkUntil = G.atkFrom + (fast ? 2600 : 2000);
+        G.nextAtk = G.atkUntil + (fast ? rand(4000, 7000) : rand(7000, 11000));
+      }
     }
     if (now >= G.nextFever) {
       G.feverUntil = now + 5000;
@@ -202,6 +257,13 @@ function snapshot() {
     m.aw = Math.max(0, G.atkFrom - now);
     m.ae = Math.max(0, G.atkUntil - now);
     m.enr = enraged() ? 1 : 0;
+    const si = segIndexAt(now);
+    if (si >= 0) {
+      const sg = SEGS[si];
+      m.sg = si;
+      // [종류, 구간 남은 ms, 박자 간격, 첫 박자 기준 경과 ms(준비 중이면 음수), PERFECT 점수, GOOD 점수]
+      m.seg = [sg[0], Math.round(G.t0 + sg[2] * 1000 - now), sg[3] || 0, isRhythm(sg) ? Math.round(now - (G.t0 + sg[1] * 1000 + LEAD_MS)) : 0, sg[4] || 0, sg[5] || 0];
+    }
     m.top = ranking.slice(0, 10).map((p) => [p.pid, p.name, p.score]);
     m.hits = hits.slice(-14);
     let st = 0;
@@ -340,7 +402,8 @@ const server = http.createServer((req, res) => {
       theme: THEME,
       story: STORY,
       prize: cfg.prize,
-      durationSec: cfg.durationSec,
+      durationSec: DURATION,
+      rhythm: RHYTHM,
       lan: lanUrls(),
     });
   }
@@ -398,7 +461,24 @@ const server = http.createServer((req, res) => {
       pl.budgetAt = now;
       n = Math.max(0, Math.min(n, Math.floor(pl.budget)));
       pl.budget -= n;
-      if (now >= pl.stunUntil) applyDamage(pl, n, now);
+      // 전송이 0.25초씩 묶여 오므로 구간이 바뀐 직후 0.7초는 이전 구간의 입력도 받아준다
+      const cur = segAt(now);
+      const old = segAt(now - 700);
+      const rsg = isRhythm(cur) ? cur : isRhythm(old) ? old : null;
+      const tapsOk = !SEGS || !isRhythm(cur) || !isRhythm(old);
+      let dmg = tapsOk ? n * mult(now) : 0; // 박자 구간의 막 치기는 0점
+      if (rsg) {
+        // 박자 판정은 폰에서 하고, 서버는 박자 수보다 많이 보내는 것만 막는다
+        if (pl.rbAt === undefined || now - pl.rbAt > 5000) { pl.rb = 2; pl.rbAt = now; }
+        pl.rb = Math.min(4, pl.rb + ((now - pl.rbAt) / 1000) * (1000 / rsg[3]) * 1.4);
+        pl.rbAt = now;
+        const total = Math.floor(pl.rb);
+        const pp = Math.max(0, Math.min(Math.floor(Number(b.p) || 0), total));
+        const gg = Math.max(0, Math.min(Math.floor(Number(b.g) || 0), total - pp));
+        pl.rb -= pp + gg;
+        dmg += pp * rsg[4] + gg * rsg[5];
+      }
+      if (now >= pl.stunUntil) applyDamage(pl, dmg, now);
       json(res, 200, { score: pl.score, rank: rankOf.get(pl.pid) || 0 });
     });
   }
@@ -429,7 +509,7 @@ const server = http.createServer((req, res) => {
         for (let i = 0; i < 10 && players.size < MAX_PLAYERS; i++) {
           const pid = nextPid++;
           const id = 'bot-' + pid + '-' + crypto.randomBytes(4).toString('hex');
-          const pl = { id, pid, name: '', score: 0, scoreAt: 0, stunUntil: 0, stuns: 0, conns: 0, budget: 0, budgetAt: 0, bot: true, skill: rand(2.4, 4.4) };
+          const pl = { id, pid, name: '', score: 0, scoreAt: 0, stunUntil: 0, stuns: 0, conns: 0, budget: 0, budgetAt: 0, bot: true, skill: rand(2.4, 4.4), acc: rand(0.3, 0.62) };
           pl.name = cleanName(names[Math.floor(Math.random() * names.length)], pid);
           players.set(id, pl);
         }
@@ -452,7 +532,7 @@ server.on('error', (e) => {
 server.listen(PORT, () => {
   setInterval(tick, TICK_MS);
   console.log('');
-  console.log('  ⚔  보스 레이드 서버 실행 중 (테마: ' + THEME + ')');
+  console.log('  ⚔  보스 레이드 서버 실행 중 (테마: ' + THEME + (RHYTHM ? ', 리듬 모드 90초' : '') + ')');
   console.log('');
   console.log(`  진행자 화면(프로젝터):  http://localhost:${PORT}/screen?key=${ADMIN_KEY}`);
   const lan = lanUrls();

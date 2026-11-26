@@ -99,7 +99,14 @@
   .dmg.big { font-size: 3.4rem; } .dmg.big b { color: #ff6b6b; }
   #banner { position: absolute; left: 0; right: 0; bottom: 3rem; text-align: center; font-size: 6.4rem; font-weight: 900; z-index: 7;
     text-shadow: 0 .6rem 0 #000, 0 0 3rem rgba(0,0,0,.8); opacity: 0; transition: opacity .2s; pointer-events: none; }
-  body.fever #banner, body.warn #banner, body.atk #banner { opacity: 1; }
+  body.fever #banner, body.warn #banner, body.atk #banner, body.rhy #banner { opacity: 1; }
+  body.rhy #banner { color: #7df9ff; }
+  body.rhy.segslow #banner { color: #ff9de1; font-size: 5.6rem; animation: wobble 1.2s ease-in-out infinite; }
+  @keyframes wobble { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
+  /* 박자 구간: 박자마다 크게 뜨는 글자와 고리 */
+  #beatWord { position: absolute; left: 50%; top: 20%; margin-left: -3rem; transform: translate(-50%, -50%); font-size: 10rem; font-weight: 900; color: #fff; opacity: 0; pointer-events: none; z-index: 7;
+    text-shadow: 0 1rem 0 #000, 0 0 5rem rgba(125, 249, 255, .9); white-space: nowrap; }
+  #beatRing { position: absolute; left: 50%; top: 50%; width: 60rem; height: 60rem; margin: -30.5rem 0 0 -33rem; border-radius: 50%; border: 1rem solid #7df9ff; opacity: 0; pointer-events: none; z-index: 6; }
   body.fever #banner { color: #ffe45c; animation: pulse .35s ease-in-out infinite alternate; }
   body.warn #banner { color: #ffb020; animation: pulse .18s ease-in-out infinite alternate; }
   body.atk #banner { color: #ff5252; font-size: 8rem; }
@@ -249,7 +256,7 @@
         <div class="hpTop"><span id="bossName">보스<small><img class="ic" src="/img/ic_fire.webp" alt=""> 분노!</small></span><span id="hpNum"></span></div>
         <div class="hp"><i id="hpGhost"></i><i id="hpFill"></i></div>
       </div>
-      <div id="bossZone"><div class="boss" id="boss"></div><div id="say"></div></div>
+      <div id="bossZone"><div class="boss" id="boss"></div><div id="beatRing"></div><div id="beatWord"></div><div id="say"></div></div>
       <div id="banner"></div>
       <div id="stunInfo"></div>
     </div>
@@ -306,6 +313,11 @@
   let state = 'lobby', view = 'lobby', info = { bossName: '보스', title: '보스 레이드', prize: '' };
   let feverEnd = 0, atkStart = 0, atkEnd = 0, timeEnd = 0, countEnd = 0, lastCount = '', enraged = false;
   let lastHp = 0, dying = 0, lastRound = -1;
+  // 박자 구간 상태 (폰과 같은 방식: 구간이 바뀔 때 한 번만 박자 기준 시각을 잡는다)
+  let seg = null, sgIdx = -1, beatO = 0, segEnd = 0, lastBeat = -1;
+  const SEG_BANNER = { r4: '♪ 박자에 맞춰! 원 · 투 · 쓰리 · 포', slow: '손가락을 빨리 움직이고 싶지?? ㅋㅋㅋㅋㅋ', r3: '♪ 쿵 · 짝 · 짝! 삼박자' };
+  const SEG_SAY = { r4: '박자도 못 맞추는 것들이!', slow: '크크… 답답하지? 천~천히 해라', r3: '이, 이 박자는 또 뭐냐!', frenzy: '오지 마! 오지 마아—!' };
+  const BEAT_WORDS = { r4: ['원', '투', '쓰리', '포'], slow: ['하나', '두울', '세엣', '네엣'], r3: ['쿵', '짝', '짝'] };
 
   // ---------- 안내 정보 + QR ----------
   fetch('/info').then((r) => r.json()).then((i) => {
@@ -314,6 +326,12 @@
     $('title').innerHTML = ic('sword') + ' ' + esc(i.title);
     $('bossName').firstChild.nodeValue = i.bossName;
     $('prize').innerHTML = i.prize ? ic('gift') + ' ' + esc(i.prize) : '';
+    if (i.rhythm) { // 리듬 모드 안내 한 줄 추가
+      const d = document.createElement('div');
+      d.innerHTML = '♪ <b>박자 구간</b>엔 고리에 맞춰 터치! <i>막 치면 0점</i>';
+      document.querySelector('.howto').appendChild(d);
+      $('chips').style.maxHeight = '33rem';
+    }
     if (i.story) {
       $('story').innerHTML = esc(i.bossName) + '이 <b>오늘 강의 자료</b>를 훔쳐 갔다!<br>모두 힘을 합쳐 되찾아라!';
       $('lobbySay').textContent = LOBBY_LINES[0];
@@ -416,6 +434,7 @@
     win() { [523, 523, 523, 698, 0, 659, 698, 784, 1047].forEach((f, i) => f && tone(f, i === 8 ? 0.9 : 0.16, 'square', 0.11, i * 0.14)); [262, 330, 392].forEach((f) => tone(f, 1.2, 'triangle', 0.1, 1.12)); },
     lose() { [392, 370, 349, 262].forEach((f, i) => tone(f, i === 3 ? 0.9 : 0.3, 'sawtooth', 0.1, i * 0.3)); },
     boom() { tone(160, 1.1, 'sawtooth', 0.22, 0, 30); noise(1.1, 0.25, 0, 100); },
+    kick(first) { tone(first ? 170 : 120, 0.18, 'sine', first ? 0.5 : 0.36, 0, 42); noise(0.04, first ? 0.12 : 0.07, 0, 3500); if (first) tone(880, 0.07, 'square', 0.06); },
     sting() { [392, 523, 659, 784].forEach((f, i) => tone(f, 0.7, 'square', 0.08, i * 0.05)); tone(98, 0.9, 'sawtooth', 0.14); },
     rise() { tone(180, 0.8, 'sawtooth', 0.09, 0, 720); noise(0.7, 0.05, 0, 3000); },
     reveal(i) { const f = [784, 659, 523][i] || 523; tone(f, 0.22, 'square', 0.11); tone(f * 1.5, 0.45, 'square', 0.1, 0.12); noise(0.25, 0.08, 0, 2500); },
@@ -424,6 +443,7 @@
   const BASS = [110, 110, 220, 110, 131, 131, 262, 131, 147, 147, 294, 147, 165, 165, 196, 220];
   function bgmTick() {
     if (!ac || state !== 'fight') return;
+    if (seg && seg.bi > 0 && performance.now() < segEnd) return; // 박자 구간에는 배경 베이스를 멈추고 북소리만
     const fever = performance.now() < feverEnd;
     const f = BASS[bgmStep % 16] * (enraged ? 1.1225 : 1);
     tone(f, 0.16, 'sawtooth', 0.055);
@@ -521,7 +541,7 @@
       chips(m.names || []);
     } else if (m.s === 'countdown') {
       if (prev !== 'countdown' || m.round !== lastRound) {
-        lastRound = m.round; lastCount = ''; enraged = false; feverEnd = atkEnd = 0; lastHp = m.max; cerClear();
+        lastRound = m.round; lastCount = ''; enraged = false; feverEnd = atkEnd = 0; lastHp = m.max; cerClear(); seg = null; sgIdx = -1;
         bossEl.classList.remove('dead', 'enraged', 'attack', 'warn', 'hurt');
         document.body.classList.remove('enraged');
         clearRank(); setHp(m.hp, m.max, true);
@@ -534,7 +554,18 @@
       if (prev !== 'fight') { bgm(true); lastHp = m.hp; lowSaid = false; say('감히 내 강의 자료를 노려?! 덤벼라!', 3000); }
       setView('fight');
       timeEnd = now + m.t;
-      if (m.fever > 0 && !(feverEnd > now)) { sfx.fever(); say('크윽… 힘이 빠진다!', 2400); }
+      if (m.seg) {
+        if (m.sg !== sgIdx) {
+          sgIdx = m.sg;
+          seg = { k: m.seg[0], bi: m.seg[2] };
+          beatO = now - m.seg[3];
+          lastBeat = -1;
+          if (SEG_SAY[seg.k]) say(SEG_SAY[seg.k], 2800);
+          if (seg.bi) sfx.rise();
+        }
+        segEnd = now + m.seg[1];
+      } else { seg = null; sgIdx = -1; }
+      if (m.fever > 0 && !(feverEnd > now)) { sfx.fever(); if (!seg || seg.k !== 'frenzy') say('크윽… 힘이 빠진다!', 2400); }
       feverEnd = m.fever > 0 ? now + m.fever : 0;
       if (m.ae > 0) {
         if (!(atkEnd > now)) { atkStart = now + m.aw; atkEnd = now + m.ae; atkSounded = false; if (m.aw > 300) sfx.warn(); }
@@ -582,10 +613,29 @@
     bossEl.classList.toggle('warn', warn);
     bossEl.classList.toggle('attack', atk);
     if (atk && !atkSounded) { atkSounded = true; sfx.atk(); shake(500, 1.6); say('건방진 것들, 손 떼라!', 1800); }
-    const bn = atk ? 'atk' : warn ? 'warn' : fever ? 'fever' : '';
+    const rh = fight && !!seg && seg.bi > 0 && now < segEnd;
+    document.body.classList.toggle('rhy', rh && !atk && !warn);
+    document.body.classList.toggle('segslow', rh && seg.k === 'slow');
+    const bn = atk ? 'atk' : warn ? 'warn' : rh ? 'seg-' + seg.k : fever ? (seg && seg.k === 'frenzy' ? 'frenzy' : 'fever') : '';
     if ($('banner').dataset.k !== bn) {
       $('banner').dataset.k = bn;
-      $('banner').innerHTML = atk ? ic('hand') + ' 손 떼!! 터치 금지!' : warn ? ic('warn') + ' 반격 준비…' : fever ? ic('fire') + ' FEVER TIME! 데미지 ×2' : '';
+      $('banner').innerHTML = atk ? ic('hand') + ' 손 떼!! 터치 금지!' : warn ? ic('warn') + ' 반격 준비…' : rh ? SEG_BANNER[seg.k]
+        : fever ? ic('fire') + (bn === 'frenzy' ? ' 마지막 광란! 데미지 ×2' : ' FEVER TIME! 데미지 ×2') : '';
+    }
+    // 박자마다: 큰 글자, 고리, 북소리, 보스 움찔
+    if (rh) {
+      const cur = Math.floor((now - beatO) / seg.bi);
+      if (cur >= 0 && cur !== lastBeat) {
+        lastBeat = cur;
+        const w = BEAT_WORDS[seg.k], first = cur % w.length === 0;
+        $('beatWord').textContent = w[cur % w.length];
+        const dur = Math.min(520, seg.bi * 0.9);
+        $('beatWord').animate([{ transform: 'translate(-50%,-50%) scale(1.7)', opacity: 1 }, { transform: 'translate(-50%,-50%) scale(1)', opacity: 1, offset: 0.3 }, { transform: 'translate(-50%,-50%) scale(.95)', opacity: 0 }], { duration: dur, easing: 'ease-out' });
+        $('beatRing').animate([{ transform: 'scale(.55)', opacity: 0.95 }, { transform: 'scale(1.15)', opacity: 0 }], { duration: dur, easing: 'ease-out' });
+        sfx.kick(first);
+        const body = bossEl.querySelector('.b-body');
+        if (body) body.animate([{ transform: 'scale(1.05,.95)' }, { transform: 'scale(1)' }], { duration: 180, easing: 'ease-out' });
+      }
     }
     if (state === 'countdown') {
       const left = countEnd - now;

@@ -80,6 +80,19 @@
   #conn { position: fixed; left: 50%; top: 4px; transform: translateX(-50%); font-size: 12px; background: #b91c1c;
     padding: 3px 10px; border-radius: 10px; display: none; z-index: 10; }
 
+  /* ---- 박자 구간 ---- */
+  #target, .bring { position: absolute; left: 50%; top: 54%; width: min(60vw, 40vh); height: min(60vw, 40vh); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; display: none; z-index: 4; }
+  #target { border: 6px solid #fff; box-shadow: 0 0 20px #7df9ff, inset 0 0 20px #7df9ff; }
+  .bring { border: 5px solid #ffe45c; opacity: 0; box-shadow: 0 0 12px rgba(255, 228, 92, .8); }
+  #beatWord { position: absolute; left: 0; right: 0; top: 54%; transform: translateY(-50%); text-align: center; font-size: 62px; font-weight: 900; color: #fff;
+    text-shadow: 0 4px 0 #000, 0 0 22px rgba(0, 0, 0, .7); pointer-events: none; z-index: 5; display: none; }
+  #arena.rhy #target, #arena.rhy .bring, #arena.rhy #beatWord { display: block; }
+  #arena.rhy .boss { opacity: .55; transition: opacity .3s; }
+  #judge { position: absolute; left: 0; right: 0; top: 24%; text-align: center; font-size: 36px; font-weight: 900; pointer-events: none; z-index: 6; opacity: 0; text-shadow: 0 3px 0 #000; }
+  #judge.perfect { color: #7df9ff; } #judge.good { color: #a3ff5c; } #judge.miss { color: #a99fc4; }
+  #combo { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center; font-size: 22px; font-weight: 900; color: #ffe45c; text-shadow: 0 2px 0 #000; pointer-events: none; z-index: 6; }
+  body.segslow #msg { color: #ff9de1; }
+
   /* ---- 발표 대기 ---- */
   #wait { align-items: center; justify-content: center; text-align: center; gap: 14px; }
   #wait .big { font-size: 34px; font-weight: 900; color: #ffe45c; animation: pulse .5s ease-in-out infinite alternate; }
@@ -128,6 +141,10 @@
   </div>
   <div id="arena">
     <div class="boss" id="boss"></div>
+    <div id="target"></div><div class="bring" id="ring0"></div><div class="bring" id="ring1"></div>
+    <div id="beatWord"></div>
+    <div id="judge"></div>
+    <div id="combo"></div>
     <div id="msg"></div>
     <div id="count"></div>
     <div id="stun"><b><img class="ic" src="/img/ic_stun.webp" alt=""></b>기절!<small>보스가 빨갈 땐 손을 떼세요</small></div>
@@ -178,7 +195,11 @@
 
   let me = null;          // {pid, name}
   let state = 'lobby';
-  let serverScore = 0, pending = 0, inflight = 0, myRank = 0;
+  let serverScore = 0, pending = 0, myRank = 0;
+  let pts = 0, inPts = 0;            // 아직 서버가 반영하지 않은 내 점수(화면 표시용)
+  // 박자 구간 상태: seg = {k: 종류, bi: 박자 간격, P/G: 점수}, beatO = 첫 박자의 내 시계 기준 시각
+  let seg = null, sgIdx = -1, beatO = 0, segEnd = 0, hitSet = new Set(), combo = 0, pP = 0, pG = 0, lastBeat = -1;
+  const rhythm = () => state === 'fight' && !!seg && seg.bi > 0;
   let feverEnd = 0, atkStart = 0, atkEnd = 0, timeEnd = 0, countEnd = 0, stunUntil = 0;
   let es = null, lastRound = -1, floats = 0, info = { bossName: '보스' };
 
@@ -272,7 +293,17 @@
         if (!(atkEnd > now)) { atkStart = now + m.aw; atkEnd = now + m.ae; }
       } else if (atkEnd - now < 300) atkEnd = 0;
       bossEl.classList.toggle('enraged', !!m.enr);
-    }
+      if (m.seg) {
+        if (m.sg !== sgIdx) { // 새 구간 시작: 박자 기준 시각은 이때 한 번만 잡아 흔들리지 않게 한다
+          sgIdx = m.sg;
+          seg = { k: m.seg[0], bi: m.seg[2], P: m.seg[4], G: m.seg[5] };
+          beatO = now - m.seg[3];
+          hitSet = new Set(); combo = 0; lastBeat = -1;
+          $('combo').textContent = '';
+        }
+        segEnd = now + m.seg[1];
+      } else { seg = null; sgIdx = -1; }
+    } else { seg = null; sgIdx = -1; }
     if (m.s === 'result' && prev !== 'result') showResult(m, prev === 'fight');
     if (m.s !== 'result') clearTimeout(resTimer);
     ui();
@@ -301,7 +332,7 @@
     $('count').style.display = state === 'countdown' ? 'flex' : 'none';
 
     if (state === 'lobby') {
-      setMsg(esc(me.name) + ' 님, 입장 완료!<small>' + (info.story ? esc(info.bossName) + '이 오늘 강의 자료를 훔쳐 갔어요!<br>' : '') + '곧 시작합니다. 앞 화면을 봐 주세요<br>보스가 <b style="color:#ff6b6b">빨갛게</b> 변하면 손을 떼야 해요</small>');
+      setMsg(esc(me.name) + ' 님, 입장 완료!<small>' + (info.story ? esc(info.bossName) + '이 오늘 강의 자료를 훔쳐 갔어요!<br>' : '') + '곧 시작합니다. 앞 화면을 봐 주세요<br>' + (info.rhythm ? '고리가 뜨면 <b style="color:#7df9ff">박자에 맞춰</b> 터치! 막 치면 0점<br>' : '') + '보스가 <b style="color:#ff6b6b">빨갛게</b> 변하면 손을 떼야 해요</small>');
       $('timer').textContent = '';
     } else if (state === 'countdown') {
       const left = countEnd - now;
@@ -309,15 +340,73 @@
       setMsg('');
     } else if (state === 'fight') {
       $('timer').textContent = Math.max(0, (timeEnd - now) / 1000).toFixed(1);
+      const rh = rhythm() && now < segEnd;
+      document.body.classList.toggle('segslow', rh && seg.k === 'slow');
       if (atk) setMsg(ic('hand') + ' 터치 금지!');
       else if (warn) setMsg(ic('warn') + ' 반격 온다! 손 뗄 준비');
-      else if (fever) setMsg(ic('fire') + ' FEVER! 데미지 2배');
+      else if (rh) setMsg(now < beatO - 250 ? '♪ 준비… 고리에 맞춰 터치!' : SEG_MSG[seg.k]);
+      else if (fever) setMsg(ic('fire') + (seg && seg.k === 'frenzy' ? ' 마지막 광란! 데미지 2배' : ' FEVER! 데미지 2배'));
       else setMsg('연타! 연타! 연타!');
     }
-    $('myScore').textContent = (serverScore + (pending + inflight) * 1).toLocaleString();
+    $('myScore').textContent = (serverScore + pts + inPts).toLocaleString();
     $('myRank').textContent = myRank ? myRank + '위' : '-';
   }
   setInterval(ui, 100);
+  const SEG_MSG = { r4: '♪ 원 · 투 · 쓰리 · 포! 박자에 맞춰', slow: '손가락을 빨리 움직이고 싶지??<br>ㅋㅋㅋㅋㅋ', r3: '♪ 쿵 · 짝 · 짝! 삼박자' };
+  const BEAT_WORDS = { r4: ['원', '투', '쓰리', '포'], slow: ['하나', '두울', '세엣', '네엣'], r3: ['쿵', '짝', '짝'] };
+
+  // ---------- 박자 구간 화면: 고리가 줄어들어 흰 원과 겹치는 순간이 박자 ----------
+  const rings = [$('ring0'), $('ring1')];
+  function beatLoop() {
+    requestAnimationFrame(beatLoop);
+    const now = performance.now();
+    const on = !!me && rhythm() && now < segEnd;
+    arena.classList.toggle('rhy', on);
+    if (!on) return;
+    const approach = Math.min(seg.bi * 2, 1300);
+    const next = Math.max(0, Math.ceil((now - beatO) / seg.bi));
+    for (let k = 0; k < 2; k++) {
+      const tb = beatO + (next + k) * seg.bi, f = (tb - now) / approach, el = rings[k];
+      if (f > 1 || tb >= segEnd) { el.style.opacity = 0; continue; }
+      el.style.opacity = String(1 - f * 0.75);
+      el.style.transform = 'translate(-50%,-50%) scale(' + (1 + f * 1.4) + ')';
+    }
+    const cur = Math.floor((now - beatO) / seg.bi);
+    if (cur >= 0 && cur !== lastBeat) {
+      lastBeat = cur;
+      const w = BEAT_WORDS[seg.k];
+      $('beatWord').textContent = w[cur % w.length];
+      $('beatWord').animate([{ transform: 'translateY(-50%) scale(1.5)', opacity: 1 }, { transform: 'translateY(-50%) scale(1)', opacity: .85 }], { duration: Math.min(260, seg.bi * 0.6), easing: 'ease-out' });
+      $('target').animate([{ transform: 'translate(-50%,-50%) scale(1.12)' }, { transform: 'translate(-50%,-50%) scale(1)' }], { duration: 160, easing: 'ease-out' });
+    }
+  }
+  requestAnimationFrame(beatLoop);
+
+  function judge(text, cls) {
+    const el = $('judge');
+    el.textContent = text; el.className = cls;
+    el.animate([{ transform: 'scale(1.6)', opacity: 1 }, { transform: 'scale(1)', opacity: 1, offset: 0.25 }, { transform: 'scale(1)', opacity: 0 }], { duration: 520, easing: 'ease-out' });
+    $('combo').textContent = combo >= 3 ? combo + ' COMBO' : '';
+  }
+  // 박자 구간의 터치: 가장 가까운 박자와의 차이로 판정. 같은 박자는 한 번만, 엇박·막 치기는 MISS
+  function rhythmTap(now) {
+    const idx = Math.round((now - beatO) / seg.bi), tb = beatO + idx * seg.bi, d = Math.abs(now - tb);
+    let grade = 'miss';
+    if (idx >= 0 && tb < segEnd && !hitSet.has(idx)) grade = d <= 95 ? 'perfect' : d <= 185 ? 'good' : 'miss';
+    if (grade === 'miss') {
+      combo = 0;
+      judge('MISS', 'miss');
+      return;
+    }
+    hitSet.add(idx);
+    combo++;
+    const v = grade === 'perfect' ? seg.P : seg.G;
+    if (grade === 'perfect') pP++; else pG++;
+    pts += v;
+    judge((grade === 'perfect' ? 'PERFECT' : 'GOOD') + ' +' + v, grade);
+    bossHit(bossEl, true);
+    if (navigator.vibrate) navigator.vibrate(grade === 'perfect' ? 18 : 10);
+  }
 
   // ---------- 터치 ----------
   function tap(x, y) {
@@ -334,8 +423,10 @@
       ui();
       return;
     }
+    if (rhythm() && now < segEnd) return rhythmTap(now);
     const fever = now < feverEnd;
     pending++;
+    pts += fever ? 2 : 1;
     poke(x, y, fever ? '+2' : '+1', fever);
     if (navigator.vibrate) navigator.vibrate(8);
   }
@@ -372,17 +463,18 @@
   document.addEventListener('dblclick', (e) => e.preventDefault());
   document.addEventListener('touchmove', (e) => { if (me) e.preventDefault(); }, { passive: false });
 
-  // 모은 터치를 0.25초마다 서버로 전송
+  // 모은 터치를 0.25초마다 서버로 전송 (n: 난타 횟수, p/g: 박자 구간의 PERFECT/GOOD 횟수)
   setInterval(() => {
-    if (!me || pending <= 0 || state !== 'fight') { if (state !== 'fight') pending = 0; return; }
-    const n = pending;
-    pending = 0; inflight += n;
-    post('/tap', { id, n }).then(({ status, j }) => {
-      inflight -= n;
+    if (state !== 'fight') { pending = 0; pP = 0; pG = 0; pts = 0; return; }
+    if (!me || (pending <= 0 && pP <= 0 && pG <= 0)) return;
+    const b = { n: pending, p: pP, g: pG, v: pts };
+    pending = 0; pP = 0; pG = 0; pts = 0; inPts += b.v;
+    post('/tap', { id, n: b.n, p: b.p, g: b.g }).then(({ status, j }) => {
+      inPts -= b.v;
       if (status === 404) { join(true); return; }
       if (typeof j.score === 'number') serverScore = j.score;
       if (j.rank) myRank = j.rank;
-    }).catch(() => { inflight -= n; });
+    }).catch(() => { inPts -= b.v; });
   }, 250);
 
   // ---------- 결과 ----------
