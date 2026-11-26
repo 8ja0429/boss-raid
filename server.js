@@ -368,6 +368,16 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 글꼴(Pretendard)은 서버에서 직접 내려준다 — 기기마다 글자 모양이 달라지지 않게
+  if (req.method === 'GET' && /^\/font\/(pretendard\.css|woff2-dynamic-subset\/PretendardVariable\.subset\.\d+\.woff2)$/.test(p)) {
+    fs.readFile(path.join(ROOT, 'public', p), (err, data) => {
+      if (err) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'Content-Type': p.endsWith('.css') ? 'text/css; charset=utf-8' : 'font/woff2', 'Cache-Control': 'public, max-age=604800' });
+      res.end(data);
+    });
+    return;
+  }
+
   if (req.method === 'GET' && /^\/img\/[a-z0-9_]+\.(webp|png|jpg)$/.test(p)) {
     const type = p.endsWith('.webp') ? 'image/webp' : p.endsWith('.png') ? 'image/png' : 'image/jpeg';
     const name = path.basename(p);

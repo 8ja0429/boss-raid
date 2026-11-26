@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>보스 레이드 — 진행 화면</title>
+<link rel="stylesheet" href="/font/pretendard.css">
 <style>
   * { box-sizing: border-box; }
   /* 화면은 항상 16:9 무대(가로 177.78rem × 세로 100rem)로 그리고, 창 크기에 맞춰 통째로 축소한다 */
   html { font-size: min(1vh, 0.5625vw); }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #05020d; }
-  body { font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; font-weight: 800; color: #fff; }
+  body { font-family: "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; font-weight: 800; color: #fff; }
   #stage { position: fixed; left: 50%; top: 50%; width: 177.78rem; height: 100rem; transform: translate(-50%, -50%); overflow: hidden; background: #0a0418; }
   .ic { height: 1.2em; width: auto; vertical-align: -0.24em; filter: drop-shadow(0 .25em .3em rgba(0, 0, 0, .45)); }
   /* 배경 그림: 대기실에서는 가운데, 전투가 시작되면 보스 쪽으로 카메라가 이동 */
